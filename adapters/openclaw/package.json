@@ -1,6 +1,6 @@
 {
   "name": "@gfrmin/credence-openclaw",
-  "version": "0.2.1",
+  "version": "0.1.0",
   "type": "module",
   "description": "Bayesian routing and governance for OpenClaw — picks the right model per turn (before_model_resolve) and blocks low-EU tool calls (before_tool_call). One brain, one utility function, your cost/quality trade-off.",
   "main": "dist/index.js",
