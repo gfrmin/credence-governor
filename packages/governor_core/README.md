@@ -24,13 +24,17 @@ neutral event and drives `proceed` / `block` / `ask` decisions.
 
 ## Install & run
 
+Not yet on PyPI — install from a clone of the repo. The core depends on the engine's
+Python wire client (`credence-skin-client`), also unpublished, so install both editable:
+
 ```bash
-pip install credence-governor-core
+pip install -e packages/governor_core -e ~/git/credence/apps/skin/clients/python
 # dev engine: a local checkout of the Credence engine
 CREDENCE_ENGINE_DIR=/path/to/credence credence-governor-daemon
-# prod: a pinned engine image
+# prod: a pinned engine image instead
 CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
   credence-governor-daemon
+# (once published:  pip install credence-governor-core)
 ```
 
 The daemon listens on `http://127.0.0.1:8787` by default

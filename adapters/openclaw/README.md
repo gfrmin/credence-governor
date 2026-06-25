@@ -38,18 +38,18 @@ interception point is an OpenClaw **plugin** `before_tool_call` hook.
 
 1. Start the **governor daemon** — the Python `credence-governor-core`, which runs the
    one EU-max reasoner over the `credence-skin` engine. It listens on
-   `http://127.0.0.1:8787`:
+   `http://127.0.0.1:8787`. Not yet on PyPI, so install from a clone of the repo:
    ```bash
-   pip install credence-governor-core
+   pip install -e packages/governor_core -e ~/git/credence/apps/skin/clients/python
    CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
      credence-governor-daemon
    ```
    (or, against a local engine checkout, `CREDENCE_ENGINE_DIR=/path/to/credence
    credence-governor-daemon`). See [`packages/governor_core`](../../packages/governor_core).
 2. Build the plugin: `cd adapters/openclaw && npm install && npm run build`.
-3. Install it into OpenClaw. From a published registry:
-   `openclaw plugins install @gfrmin/credence-openclaw`; or link a local
-   checkout for development: `openclaw plugins install -l adapters/openclaw`.
+3. Install it into OpenClaw by linking this checkout:
+   `openclaw plugins install -l adapters/openclaw` (once it's on npm:
+   `openclaw plugins install @gfrmin/credence-openclaw`).
    Then `openclaw plugins enable credence-openclaw`.
 4. **Per-turn cost signal.** On current OpenClaw (≥ 2026.6.2) the `llm_output`
    cost hook is active out of the box — no extra config. (Older builds gated it

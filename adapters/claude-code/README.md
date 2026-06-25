@@ -66,18 +66,27 @@ transcript turn) is an open design question, deferred.
 
 ## Install
 
-Start the daemon (see the [core README](../../packages/governor_core)), then register
-the hook:
+**1. Start the daemon** — every adapter shares one local daemon; see the
+[core README](../../packages/governor_core) or the
+[repo quickstart](../../README.md#install). In short, from a clone of the repo:
 
 ```bash
-pip install credence-governor-claude-code        # provides the console scripts
-credence-governor-cc-install                      # → ~/.claude/settings.json
+pip install -e packages/governor_core -e ~/git/credence/apps/skin/clients/python
+CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon   # or CREDENCE_SKIN_COMMAND="docker run … credence-skin@<digest>"
+```
+
+**2. Install this adapter and register the hook:**
+
+```bash
+pip install -e adapters/claude-code        # not yet on PyPI; once published: pip install credence-governor-claude-code
+credence-governor-cc-install               # → ~/.claude/settings.json
 # or per-project:  credence-governor-cc-install --project   # → ./.claude/settings.json
 ```
 
 This appends a `PreToolUse` hook (idempotent; existing settings preserved). Remove
-with `credence-governor-cc-install --uninstall`. The example config is in
-[`settings.example.json`](settings.example.json).
+with `credence-governor-cc-install --uninstall`. The hook itself has **no runtime
+dependencies** (pure stdlib); `credence-governor-core` is needed only for the daemon and
+the parity test. The example config is in [`settings.example.json`](settings.example.json).
 
 ### Environment
 

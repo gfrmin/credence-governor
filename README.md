@@ -34,35 +34,66 @@ adapter stays thin. The policy *is* credence — one EU-max reasoner.
 | `adapters/openclaw/` | the OpenClaw plugin body (`@gfrmin/credence-openclaw`) — a thin TS shim forced by OpenClaw's Node runtime. |
 | `adapters/claude-code/` | the Claude Code subprocess-hook adapter (Python). |
 
-## Run the daemon (dev)
+## Install
+
+> **Packages are not on PyPI/npm yet** — install from a clone of this repo. The
+> published names (`pip install credence-governor-core`,
+> `openclaw plugins install @gfrmin/credence-openclaw`) are noted where they'll apply
+> once released. Requires Python ≥ 3.11; the OpenClaw adapter also needs Node ≥ 20.
+
+```bash
+git clone https://github.com/gfrmin/credence-governor
+cd credence-governor
+```
+
+### Step 1 — the daemon (required for every agent)
+
+Both adapters talk to one local daemon. It needs the **Credence engine**, supplied
+either as a pinned image (prod) or a local checkout (dev):
 
 ```bash
 pip install -e packages/governor_core \
-            -e ~/git/credence/apps/skin/clients/python   # the engine's Python wire client
+            -e ~/git/credence/apps/skin/clients/python   # engine's Python wire client (not yet on PyPI)
+
+# prod — a pinned engine image:
+CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
+  credence-governor-daemon
+# dev — a local engine checkout instead:
 CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon
-# prod: CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>"
 ```
 
+It listens on `http://127.0.0.1:8787` (override with `CREDENCE_GOVERNOR_HOST` /
+`CREDENCE_GOVERNOR_PORT`). Verify: `curl -s localhost:8787/ready`.
 `POST /decide` `{tool_name, input, session:{cwd,project_root,messages}}` →
-`{action: "proceed"|"block"|"ask"}`. Also `GET /ready`, `GET /report`, and the
+`{action: "proceed"|"block"|"ask"}`; also `GET /report` and the
 `POST /sensor` + `GET /signals` (SSE) pair for in-process plugins.
 
-## Govern an agent
-
-**Claude Code** (subprocess hook):
+### Step 2a — govern **Claude Code** (subprocess hook)
 
 ```bash
-pip install credence-governor-claude-code
-credence-governor-cc-install              # register the PreToolUse hook in ~/.claude/settings.json
+pip install -e adapters/claude-code     # once published:  pip install credence-governor-claude-code
+credence-governor-cc-install            # registers the PreToolUse hook in ~/.claude/settings.json
+#   --project   → ./.claude/settings.json (this repo only)
+#   --uninstall → remove it
 ```
 
-With the daemon running, tool calls are now gated (`block` → deny, `ask` → prompt;
+With the daemon up, tool calls are now gated: `block` → deny, `ask` → prompt;
 `proceed` defers to Claude Code's own rules — the governor only adds friction, never
-removes it). Fail-open: if the daemon is down, tools run normally. See
-[`adapters/claude-code`](adapters/claude-code).
+removes it. Fail-open: if the daemon is down or slow, tools run normally. Full env
+table in [`adapters/claude-code`](adapters/claude-code).
 
-**OpenClaw** (in-process plugin): `openclaw plugins install @gfrmin/credence-openclaw`
-— see [`adapters/openclaw`](adapters/openclaw).
+### Step 2b — govern **OpenClaw** (in-process plugin)
+
+```bash
+cd adapters/openclaw && npm install && npm run build
+openclaw plugins install -l .            # link this checkout (once published: openclaw plugins install @gfrmin/credence-openclaw)
+openclaw plugins enable credence-openclaw
+# restart the gateway; confirm with: openclaw plugins list
+```
+
+The OpenClaw adapter adds **EU-max model routing** on top of governance (on by
+default). Config keys, profiles, and pricing are in
+[`adapters/openclaw`](adapters/openclaw).
 
 ## Tests
 
