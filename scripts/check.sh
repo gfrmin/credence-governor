@@ -18,7 +18,8 @@ PY="${PYTHON:-python3}"
 echo "== ruff: governor-core + claude-code adapter =="
 "$PY" -m ruff check \
   packages/governor_core/credence_governor_core \
-  adapters/claude-code/credence_governor_claude_code
+  adapters/claude-code/credence_governor_claude_code \
+  adapters/claude-code/plugin_hook.py
 
 echo "== pytest: governor-core (parity; no engine needed) =="
 PYTHONPATH="packages/governor_core" "$PY" -m pytest packages/governor_core/tests -q

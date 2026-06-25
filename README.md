@@ -68,19 +68,23 @@ It listens on `http://127.0.0.1:8787` (override with `CREDENCE_GOVERNOR_HOST` /
 `{action: "proceed"|"block"|"ask"}`; also `GET /report` and the
 `POST /sensor` + `GET /signals` (SSE) pair for in-process plugins.
 
-### Step 2a — govern **Claude Code** (subprocess hook)
+### Step 2a — govern **Claude Code** (PreToolUse hook)
 
-```bash
-pip install -e adapters/claude-code     # once published:  pip install credence-governor-claude-code
-credence-governor-cc-install            # registers the PreToolUse hook in ~/.claude/settings.json
-#   --project   → ./.claude/settings.json (this repo only)
-#   --uninstall → remove it
+Install it as a **plugin** — the hook is pure stdlib, so there's no `pip install`.
+Inside Claude Code:
+
 ```
+/plugin marketplace add gfrmin/credence-governor
+/plugin install credence-governor-claude-code@credence-governor
+```
+
+(Prefer pip? `pip install -e adapters/claude-code && credence-governor-cc-install`
+registers the same hook in `~/.claude/settings.json`.)
 
 With the daemon up, tool calls are now gated: `block` → deny, `ask` → prompt;
 `proceed` defers to Claude Code's own rules — the governor only adds friction, never
-removes it. Fail-open: if the daemon is down or slow, tools run normally. Full env
-table in [`adapters/claude-code`](adapters/claude-code).
+removes it. Fail-open: if the daemon is down or slow, tools run normally. Both install
+methods and the env table are in [`adapters/claude-code`](adapters/claude-code).
 
 ### Step 2b — govern **OpenClaw** (in-process plugin)
 

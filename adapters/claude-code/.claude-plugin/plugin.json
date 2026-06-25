@@ -1,0 +1,12 @@
+{
+  "name": "credence-governor-claude-code",
+  "description": "Bayesian tool-call governance for Claude Code — a PreToolUse hook that gates tool calls (proceed/block/ask) via the credence-governor daemon. Adds friction (deny/ask); never weakens the host's own permission prompts.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Guy Freeman"
+  },
+  "homepage": "https://github.com/gfrmin/credence-governor/tree/master/adapters/claude-code",
+  "repository": "https://github.com/gfrmin/credence-governor",
+  "license": "AGPL-3.0-or-later",
+  "keywords": ["governance", "bayesian", "safety", "hooks", "credence", "tool-gating"]
+}

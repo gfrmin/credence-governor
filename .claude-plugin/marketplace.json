@@ -1,0 +1,17 @@
+{
+  "name": "credence-governor",
+  "owner": {
+    "name": "Guy Freeman",
+    "url": "https://github.com/gfrmin"
+  },
+  "description": "Bayesian governance for coding agents — one engine-backed brain, thin per-harness adapters.",
+  "homepage": "https://github.com/gfrmin/credence-governor",
+  "plugins": [
+    {
+      "name": "credence-governor-claude-code",
+      "source": "./adapters/claude-code",
+      "description": "PreToolUse hook that Bayesian-governs Claude Code tool calls (proceed/block/ask) via the credence-governor daemon. Requires the daemon running locally; fails open if it is down.",
+      "version": "0.1.0"
+    }
+  ]
+}

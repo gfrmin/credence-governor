@@ -75,18 +75,40 @@ pip install -e packages/governor_core -e ~/git/credence/apps/skin/clients/python
 CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon   # or CREDENCE_SKIN_COMMAND="docker run … credence-skin@<digest>"
 ```
 
-**2. Install this adapter and register the hook:**
+**2. Register the hook** — two ways; both end at the same `PreToolUse` hook.
+
+### Method A — as a Claude Code plugin (recommended; no `pip install`)
+
+The hook is pure stdlib, so the plugin **bundles** it and runs it via
+`${CLAUDE_PLUGIN_ROOT}` — there's nothing to `pip install`. Inside Claude Code:
+
+```
+/plugin marketplace add gfrmin/credence-governor
+/plugin install credence-governor-claude-code@credence-governor
+```
+
+The hook is active in new sessions (run `/reload-plugins` to pick it up in the current
+one). Manage or remove it from the `/plugin` menu. The plugin reuses the *same*
+`credence_governor_claude_code` package this directory ships — `plugin_hook.py` is a
+thin launcher that puts it on `sys.path` and calls the same entry point the pip console
+script uses (one implementation, two install paths). Manifests:
+[`.claude-plugin/plugin.json`](.claude-plugin/plugin.json),
+[`hooks/hooks.json`](hooks/hooks.json), and the repo-root
+[`.claude-plugin/marketplace.json`](../../.claude-plugin/marketplace.json).
+
+### Method B — as a pip package + settings hook
+
+If you'd rather manage it with pip (or script the registration):
 
 ```bash
 pip install -e adapters/claude-code        # not yet on PyPI; once published: pip install credence-governor-claude-code
-credence-governor-cc-install               # → ~/.claude/settings.json
-# or per-project:  credence-governor-cc-install --project   # → ./.claude/settings.json
+credence-governor-cc-install               # → ~/.claude/settings.json  (idempotent)
+#   --project   → ./.claude/settings.json   ·   --uninstall → remove
 ```
 
-This appends a `PreToolUse` hook (idempotent; existing settings preserved). Remove
-with `credence-governor-cc-install --uninstall`. The hook itself has **no runtime
-dependencies** (pure stdlib); `credence-governor-core` is needed only for the daemon and
-the parity test. The example config is in [`settings.example.json`](settings.example.json).
+Either way the hook has **no runtime dependencies** (pure stdlib); `credence-governor-core`
+is needed only for the daemon and the parity test. Static config example:
+[`settings.example.json`](settings.example.json).
 
 ### Environment
 
