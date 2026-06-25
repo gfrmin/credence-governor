@@ -4,6 +4,11 @@ Bayesian tool-call governance for coding agents — one brain, thin per-harness
 adapters. The agent's tool calls are gated by a Bayesian decision
 (`proceed` / `block` / `ask`) computed by the **Credence** decision engine.
 
+> **The daemon is required.** Both adapters fail open: with no `credence-governor`
+> daemon on `:8787`, every tool call proceeds ungoverned — no governance, no error.
+> Start it with **`credence-governor-daemon`** (zero-config if docker/podman is
+> installed); verify with `curl -s localhost:8787/ready`.
+
 ## Architecture — a pure wire consumer
 
 credence-governor carries **zero probabilistic code**. All inference and decisions
@@ -43,22 +48,28 @@ adapter stays thin. The policy *is* credence — one EU-max reasoner.
 
 ### Step 1 — the daemon (required for every agent)
 
-Both adapters talk to one local daemon. Install it from PyPI (it pulls the engine's
-Python wire client automatically), then point it at the **Credence engine** — a pinned
-image (prod) or a local checkout (dev):
+Both adapters talk to one local daemon. Install it and run it — **zero-config**: with
+docker or podman on PATH it auto-runs the published engine image
+(`ghcr.io/gfrmin/credence-skin:latest`), no env vars needed:
 
 ```bash
 pip install credence-governor-core      # pulls credence-skin-client
+credence-governor-daemon                # zero-config: auto-runs the engine via docker/podman
+```
 
-# prod — a pinned engine image:
-CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin:latest" \
+Overrides, if you need them — pin a digest in prod, or use a dev engine checkout:
+
+```bash
+# prod — pin the engine image by digest (reproducible):
+CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
   credence-governor-daemon
 # dev — a local engine checkout instead:
 CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon
 ```
 
 It listens on `http://127.0.0.1:8787` (override with `CREDENCE_GOVERNOR_HOST` /
-`CREDENCE_GOVERNOR_PORT`). Verify: `curl -s localhost:8787/ready`.
+`CREDENCE_GOVERNOR_PORT`). Verify: `curl -s localhost:8787/ready`. **Until `/ready`
+returns `{"status":"ready"}`, both adapters are a silent fail-open no-op.**
 `POST /decide` `{tool_name, input, session:{cwd,project_root,messages}}` →
 `{action: "proceed"|"block"|"ask"}`; also `GET /report` and the
 `POST /sensor` + `GET /signals` (SSE) pair for in-process plugins.
@@ -95,9 +106,10 @@ openclaw plugins enable credence-openclaw
 (Developing against a checkout instead? `cd adapters/openclaw && npm install && npm run
 build && openclaw plugins install -l .`)
 
-The OpenClaw adapter adds **EU-max model routing** on top of governance (on by
-default). Config keys, profiles, and pricing are in
-[`adapters/openclaw`](adapters/openclaw).
+As with Claude Code, this needs the Step-1 daemon: with nothing on `:8787`, routing and
+governance silently no-op (fail-open). The OpenClaw adapter adds **EU-max model routing**
+on top of governance (on by default). Config keys, profiles, and pricing — and an opt-in
+`autostartDaemon` — are in [`adapters/openclaw`](adapters/openclaw).
 
 ## Tests
 
