@@ -1,13 +1,17 @@
-"""install.py — idempotently register (or remove) the PreToolUse hook in a Claude
-Code settings.json.
+"""install.py — idempotently register (or remove) the credence-governor hooks in a
+Claude Code settings.json.
 
     credence-governor-cc-install            # -> ~/.claude/settings.json
     credence-governor-cc-install --project  # -> ./.claude/settings.json
     credence-governor-cc-install --path X    # -> X
     credence-governor-cc-install --uninstall
 
-The hook command defaults to the installed console script `credence-governor-claude-code`.
-Existing settings are preserved; we only touch hooks.PreToolUse, and dedupe by command.
+Registers TWO hooks (the pip-path equivalent of the plugin's hooks/hooks.json):
+  • PreToolUse  → credence-governor-claude-code      (gates each tool call)
+  • SessionStart → credence-governor-cc-session-start (warns if the daemon is down)
+
+Existing settings are preserved; we only touch hooks.PreToolUse / hooks.SessionStart,
+and dedupe by command.
 """
 
 from __future__ import annotations
@@ -18,8 +22,9 @@ import os
 import sys
 from typing import Any
 
-HOOK_COMMAND = "credence-governor-claude-code"
-_MATCHER = "*"  # all tools
+HOOK_COMMAND = "credence-governor-claude-code"  # PreToolUse
+SESSION_START_COMMAND = "credence-governor-cc-session-start"  # SessionStart
+_MATCHER = "*"  # all tools (PreToolUse)
 
 
 def _load(path: str) -> dict[str, Any]:
@@ -45,21 +50,38 @@ def _command_present(entries: list[dict[str, Any]], command: str) -> bool:
     return False
 
 
+def _add_event(settings: dict[str, Any], event: str, command: str, matcher: str | None) -> None:
+    entries = settings.setdefault("hooks", {}).setdefault(event, [])
+    if _command_present(entries, command):
+        return
+    entry: dict[str, Any] = {"hooks": [{"type": "command", "command": command}]}
+    if matcher is not None:
+        entry = {"matcher": matcher, **entry}
+    entries.append(entry)
+
+
+def _remove_event(settings: dict[str, Any], event: str, command: str) -> None:
+    entries = settings.get("hooks", {}).get(event)
+    if not entries:
+        return
+    for entry in entries:
+        entry["hooks"] = [
+            h
+            for h in entry.get("hooks", [])
+            if not (h.get("type") == "command" and h.get("command") == command)
+        ]
+    settings["hooks"][event] = [e for e in entries if e.get("hooks")]
+
+
 def add(settings: dict[str, Any], command: str = HOOK_COMMAND) -> dict[str, Any]:
-    hooks = settings.setdefault("hooks", {})
-    pre = hooks.setdefault("PreToolUse", [])
-    if not _command_present(pre, command):
-        pre.append({"matcher": _MATCHER, "hooks": [{"type": "command", "command": command}]})
+    _add_event(settings, "PreToolUse", command, _MATCHER)
+    _add_event(settings, "SessionStart", SESSION_START_COMMAND, None)
     return settings
 
 
 def remove(settings: dict[str, Any], command: str = HOOK_COMMAND) -> dict[str, Any]:
-    pre = settings.get("hooks", {}).get("PreToolUse", [])
-    for entry in pre:
-        entry["hooks"] = [
-            h for h in entry.get("hooks", []) if not (h.get("type") == "command" and h.get("command") == command)
-        ]
-    settings.get("hooks", {})["PreToolUse"] = [e for e in pre if e.get("hooks")]
+    _remove_event(settings, "PreToolUse", command)
+    _remove_event(settings, "SessionStart", SESSION_START_COMMAND)
     return settings
 
 
@@ -72,11 +94,11 @@ def _target(args: argparse.Namespace) -> str:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Register the credence-governor PreToolUse hook.")
+    ap = argparse.ArgumentParser(description="Register the credence-governor Claude Code hooks.")
     ap.add_argument("--project", action="store_true", help="install into ./.claude/settings.json")
     ap.add_argument("--path", help="explicit settings.json path")
-    ap.add_argument("--command", default=HOOK_COMMAND, help="hook command to register")
-    ap.add_argument("--uninstall", action="store_true", help="remove the hook instead")
+    ap.add_argument("--command", default=HOOK_COMMAND, help="PreToolUse hook command to register")
+    ap.add_argument("--uninstall", action="store_true", help="remove the hooks instead")
     args = ap.parse_args()
 
     path = _target(args)
@@ -84,7 +106,7 @@ def main() -> int:
     settings = remove(settings, args.command) if args.uninstall else add(settings, args.command)
     _save(path, settings)
     verb = "removed from" if args.uninstall else "installed into"
-    sys.stdout.write(f"credence-governor PreToolUse hook {verb} {path}\n")
+    sys.stdout.write(f"credence-governor hooks (PreToolUse + SessionStart) {verb} {path}\n")
     return 0
 
 

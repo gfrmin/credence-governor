@@ -72,7 +72,8 @@ transcript turn) is an open design question, deferred.
 
 ```bash
 pip install credence-governor-core   # pulls credence-skin-client
-CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon   # or CREDENCE_SKIN_COMMAND="docker run … credence-skin:latest"
+credence-governor-daemon             # zero-config: auto-runs the engine via docker/podman
+#   overrides: CREDENCE_ENGINE_DIR=~/git/credence  (dev checkout)  ·  CREDENCE_SKIN_COMMAND=…  (pin a digest)
 ```
 
 > ⚠️ **The daemon is required — the hook does nothing without it.** The hook *fails
@@ -80,7 +81,9 @@ CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon   # or CREDENCE_SKIN
 > **no governance and no error**. Confirm the daemon is up with
 > `curl -s localhost:8787/ready`, and run a session with `CREDENCE_GOVERNOR_DEBUG=1` to
 > watch each decision (and any fail-open) on stderr. The plugin is only the thin hook;
-> install it *and* run the daemon.
+> install it *and* run the daemon. The bundled **SessionStart hook** warns you at the
+> start of every session if the daemon is down (and can auto-start it — see below), so
+> the no-op state is never silent.
 
 **2. Register the hook** — two ways; both end at the same `PreToolUse` hook.
 
@@ -153,6 +156,25 @@ is needed only for the daemon and the parity test. Static config example:
 | `CREDENCE_GOVERNOR_TIMEOUT` | `5.0` | per-call `/decide` timeout (s); on timeout → fail open |
 | `CREDENCE_GOVERNOR_PROFILE` | *(none)* | utility profile passed to the daemon (e.g. `flow-guard`) |
 | `CREDENCE_GOVERNOR_DEBUG` | *(off)* | log decisions/failures to stderr |
+| `CREDENCE_GOVERNOR_AUTOSTART` | *(off)* | truthy → the SessionStart hook auto-starts the daemon (detached) if it's down |
+| `CREDENCE_GOVERNOR_AUTOSTART_WAIT` | `8.0` | post-autostart `/ready` poll budget (s) before reporting STARTING |
+| `CREDENCE_GOVERNOR_READY_TIMEOUT` | `1.5` | SessionStart `/ready` probe timeout (s) |
+
+### SessionStart hook (daemon-down warning + opt-in autostart)
+
+Alongside the `PreToolUse` gate, the plugin registers a **`SessionStart`** hook
+(`plugin_session_start.py`). At the start of every session it probes `GET /ready`:
+
+- **daemon up** → silent (no spam).
+- **daemon down** → a `systemMessage` warns *you* and `additionalContext` tells *Claude*
+  that this session is ungoverned (fail-open), with the exact start command — the no-op
+  state is never silent.
+- **`CREDENCE_GOVERNOR_AUTOSTART=1` + down** → spawns `credence-governor-daemon` detached
+  (idempotent — keyed off `/ready`, so a concurrent harness can't double-start it), polls
+  briefly, and reports `ONLINE` / `STARTING`. Default-OFF, because booting the engine is
+  heavyweight (~18s) and the daemon is shared across harnesses.
+
+The pip path registers both hooks too (`credence-governor-cc-install`).
 
 ## Tests
 

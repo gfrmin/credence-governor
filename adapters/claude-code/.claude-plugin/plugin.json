@@ -1,6 +1,6 @@
 {
   "name": "credence-governor-claude-code",
-  "description": "Bayesian tool-call governance for Claude Code — a PreToolUse hook that gates tool calls (proceed/block/ask) via the credence-governor daemon. Adds friction (deny/ask); never weakens the host's own permission prompts.",
+  "description": "Bayesian PreToolUse governance for Claude Code (proceed/block/ask). Requires the credence-governor daemon on :8787 — without it every tool call proceeds ungoverned (fails open, silently). Start it: credence-governor-daemon. Adds friction (deny/ask) only; never weakens the host's own permission prompts.",
   "version": "0.1.0",
   "author": {
     "name": "Guy Freeman"

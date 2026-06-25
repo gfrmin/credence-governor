@@ -11,12 +11,28 @@ import os
 import urllib.request
 from typing import Any
 
-DEFAULT_URL = "http://127.0.0.1:8787"
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = "8787"
 DEFAULT_TIMEOUT = 5.0
+
+# Shared daemon-process constants — one source for "how to start the daemon", reused by
+# the PreToolUse hook's debug hint AND the SessionStart hook (warning text + autostart).
+DAEMON_CMD = "credence-governor-daemon"
+INSTALL_CMD = "pip install credence-governor-core"
+AUTOSTART_ENV = "CREDENCE_GOVERNOR_AUTOSTART"
 
 
 def base_url() -> str:
-    return os.environ.get("CREDENCE_GOVERNOR_URL", DEFAULT_URL)
+    """The daemon base URL. CREDENCE_GOVERNOR_URL is the explicit override; otherwise it
+    is composed from CREDENCE_GOVERNOR_HOST / CREDENCE_GOVERNOR_PORT — the SAME vars the
+    daemon binds — so ONE relocation override moves the daemon AND both adapter paths
+    (/decide + the SessionStart /ready probe) together, with no disjoint-config trap."""
+    url = os.environ.get("CREDENCE_GOVERNOR_URL")
+    if url:
+        return url
+    host = os.environ.get("CREDENCE_GOVERNOR_HOST", DEFAULT_HOST)
+    port = os.environ.get("CREDENCE_GOVERNOR_PORT", DEFAULT_PORT)
+    return f"http://{host}:{port}"
 
 
 def timeout_s() -> float:

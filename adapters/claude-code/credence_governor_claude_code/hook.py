@@ -60,7 +60,10 @@ def main() -> int:
     try:
         out = handle(hook_input)
     except Exception as err:  # fail-open: daemon down, timeout, anything
-        _debug(f"decision error (failing open): {err}")
+        _debug(
+            "decision error — failing open (tool proceeds UNGOVERNED). Is the daemon up "
+            f"on :{client.DEFAULT_PORT}? Start it: {client.DAEMON_CMD} — err: {err}"
+        )
         return 0
     if out is not None:
         sys.stdout.write(json.dumps(out))
