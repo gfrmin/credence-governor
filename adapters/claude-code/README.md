@@ -80,15 +80,16 @@ CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon   # or CREDENCE_SKIN
 ### Method A — as a Claude Code plugin (recommended; no `pip install`)
 
 The hook is pure stdlib, so the plugin **bundles** it and runs it via
-`${CLAUDE_PLUGIN_ROOT}` — there's nothing to `pip install`. Inside Claude Code:
+`${CLAUDE_PLUGIN_ROOT}` — there's nothing to `pip install`. Inside Claude Code, add the
+marketplace, then enable the plugin from the `/plugin` menu:
 
 ```
 /plugin marketplace add gfrmin/credence-governor
-/plugin install credence-governor-claude-code@credence-governor
 ```
 
-The hook is active in new sessions (run `/reload-plugins` to pick it up in the current
-one). Manage or remove it from the `/plugin` menu. The plugin reuses the *same*
+Now open `/plugin`, find **credence-governor-claude-code** in the list, and enable it
+(`/reload-plugins` activates it in the current session; it's also on in new ones).
+Manage or remove it from the same `/plugin` menu. The plugin reuses the *same*
 `credence_governor_claude_code` package this directory ships — `plugin_hook.py` is a
 thin launcher that puts it on `sys.path` and calls the same entry point the pip console
 script uses (one implementation, two install paths). Manifests:
