@@ -107,6 +107,32 @@ test("before_tool_call: ask → requireApproval; onResolution posts user-respond
   h.gov.cleanup();
 });
 
+test("before_tool_call: posts the neutral session for server-side extraction (proposed call excluded)", async () => {
+  const h = harness();
+  // First call: becomes a prior in the buffer.
+  const p1 = h.gov.beforeToolCall(ev("bash", { params: { command: "ls" } }), ctx);
+  await flush();
+  h.signal("proceed", h.lastProposedId());
+  await p1;
+  // Second call: its sensor event must carry the first as a prior tool_call, NOT itself.
+  const p2 = h.gov.beforeToolCall(ev("bash", { params: { command: "pwd" } }), ctx);
+  await flush();
+  h.signal("proceed", h.lastProposedId());
+  await p2;
+
+  const tp = [...h.posted].reverse().find((e) => e.event_type === "tool-proposed") as
+    | { tool_name: string; input: unknown; session: { messages: Array<Record<string, unknown>> }; features?: unknown }
+    | undefined;
+  assert.equal(tp?.tool_name, "bash");
+  assert.deepEqual(tp?.input, { command: "pwd" });
+  // No client-side features: extraction is server-side now.
+  assert.equal(tp?.features, undefined);
+  const calls = (tp?.session.messages ?? []).filter((m) => m.role === "tool_call");
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].input, { command: "ls" });
+  h.gov.cleanup();
+});
+
 test("before_tool_call: daemon timeout → fail-open, awaiter cleaned up", async () => {
   const h = harness();
   const r = await h.gov.beforeToolCall(ev(), ctx); // no signal; times out at 50ms

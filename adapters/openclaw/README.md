@@ -140,14 +140,27 @@ npm run typecheck  # tsc --noEmit
 npm test           # node --test (tsx) over tests/*.test.ts
 ```
 
+## Architecture (server-side extraction)
+
+Feature & taint extraction is **server-side**, single-sourced in the governor core
+(`packages/governor_core`, Python). This adapter carries **no** feature or safety
+logic: `session.ts` maintains a per-run **message buffer** (tool calls + results) and
+posts the harness-neutral `{tool_name, input, session:{cwd, project_root, messages}}`;
+the daemon extracts. This is the same neutral shape the Claude Code adapter builds from
+its transcript — one extractor, every harness (DRY). Routing's `prompt-length` feature
+is the one exception that stays client-side (it has no cross-harness analogue).
+
 ## Known limitations (Move 1 / MVP-0)
 
-- `working-directory-relative` and `time-since-last-user-message` features
-  are best-effort (OpenClaw doesn't put cwd or message timestamps on the
-  tool ctx); the loop-relevant features (tool-name, parent, repetition)
-  are exact. In Move 1 the brain does not condition on features at decision
-  time, so this only affects future feature-conditioned learning.
-- Cost USD is reconstructed from a local price table (no host
-  `calculateCost` dependency); override via `pricing`.
-- The per-run feature buffer is bounded per run but the run map is not
-  evicted on a long-lived gateway — a PASS-2 cleanup item.
+- `working-directory-relative` and `time-since-last-user-message` are best-effort
+  (OpenClaw doesn't put a cwd or message timestamps on the tool ctx — cwd is mapped
+  from the tool's first derived path, and there is no user-message hook to stamp);
+  the loop-relevant features (tool-name, parent, repetition) are exact.
+- `redactToolInputs` blanks the tool input in the human-facing **ask-text preview**
+  and keeps it out of the observation log (which stores only derived feature buckets);
+  the real input still reaches the local daemon transiently for extraction (you cannot
+  detect identical-call loops without seeing the args).
+- Cost USD is reconstructed from a local price table (no host `calculateCost`
+  dependency); override via `pricing`.
+- The per-run message buffer is bounded per run but the run map is not evicted on a
+  long-lived gateway — a cleanup item.

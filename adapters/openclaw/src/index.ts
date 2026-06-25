@@ -29,8 +29,7 @@ import {
   type SignalEnvelope,
   type Logger,
 } from "./daemon-client.js";
-import { FeatureTracker } from "./features.js";
-import { SafetyTracker } from "./safety.js";
+import { SessionTracker } from "./session.js";
 import { extractRoutingFeatures } from "./routing-features.js";
 import { buildRoster, type RoutingModel } from "./roster.js";
 import { buildPriceTable, computeTurnCost, type PriceTable } from "./cost.js";
@@ -183,12 +182,10 @@ export function createGovernor(
 ): Governor {
   const { hookTimeoutMs, approvalTimeoutMs, priceTable, redactToolInputs,
     shadowMode, roster, profile, log } = opts;
-  const tracker = new FeatureTracker();
-  // Safety (multi-outcome): accumulates taint from tool results and emits the taint-flow
-  // features the harm posterior conditions on. The daemon ignores them unless harm
-  // governance is enabled (harm-cost>0 + the shipped harm posterior), so emitting them is
-  // safe with any daemon version.
-  const safety = new SafetyTracker();
+  // One per-run message buffer. Feature & taint extraction is server-side in the daemon
+  // (single-sourced in credence-governor-core); the body only maintains the neutral
+  // session history the daemon extracts from — see session.ts.
+  const session = new SessionTracker();
 
   // event_id -> resolver for the awaited effector signal. The single SSE
   // consumer dispatches signals here by in_response_to. Unmatched signals
@@ -231,19 +228,24 @@ export function createGovernor(
     const t0 = Date.now();
     const signalPromise = awaitSignal(eventId);
 
-    const features = tracker.extractAndRecord(event, ctx);
-    // Add the safety (taint-flow) features against the session's causal taint state. The
-    // brain reads only its declared subsets, so this is additive and backward-compatible.
-    Object.assign(features, safety.extractSafety(event.toolName, event.params, ctx));
+    // Build the neutral decision request (tool + input + prior session history) and let
+    // the daemon extract features/taint server-side. The proposed call is excluded from
+    // session.messages (the extractors count priors only); snapshot records it afterwards.
+    const req = session.snapshot(event, ctx);
     const post = await client.postSensor({
       event_type: "tool-proposed",
       event_id: eventId,
       session_id: ctx.sessionId ?? ctx.sessionKey ?? "",
       timestamp: new Date().toISOString(),
-      features,
-      // Tool inputs can carry secrets (commands, tokens). Operators may
-      // redact them; the brain does not condition on input (Move 1), only
-      // the daemon's ask-text preview uses it.
+      // The neutral event the daemon extracts from (tool-name / repetition / taint all
+      // derive from these). `input` reaches the daemon transiently for extraction; it is
+      // never logged raw (the observation log stores only the derived feature buckets).
+      tool_name: req.tool_name,
+      input: req.input,
+      session: req.session,
+      // The human-facing ask-text preview only. `redactToolInputs` blanks it so secrets
+      // (commands, tokens) never surface in the approval UI; extraction still uses the
+      // real `input` above.
       proposed_call: {
         tool_name: event.toolName,
         input: redactToolInputs ? null : event.params,
@@ -365,10 +367,10 @@ export function createGovernor(
     event: AfterToolCallEvent,
     ctx: ToolContext,
   ): Promise<void> {
-    // Taint SOURCE: the tool result is content from the outside world. Accumulate its
-    // distinctive tokens + imperative verbs so a later sink carrying them is flagged
-    // (causal — only results seen BEFORE a call can taint it).
-    safety.observeResult(event.result, ctx);
+    // Taint SOURCE: the tool result is content from the outside world. Record it in the
+    // session buffer so the daemon flags a later sink carrying its tokens (causal — only
+    // results seen BEFORE a call can taint it; the daemon replays the buffer in order).
+    session.recordResult(event, ctx);
     // Correlate by the stable toolCallId (tools run in parallel).
     await client.postSensor({
       event_type: "tool-completed",
