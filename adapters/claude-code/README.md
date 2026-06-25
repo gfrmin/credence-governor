@@ -68,28 +68,62 @@ transcript turn) is an open design question, deferred.
 
 **1. Start the daemon** — every adapter shares one local daemon; see the
 [core README](../../packages/governor_core) or the
-[repo quickstart](../../README.md#install). In short, from a clone of the repo:
+[repo quickstart](../../README.md#install). In short:
 
 ```bash
 pip install credence-governor-core   # pulls credence-skin-client
 CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon   # or CREDENCE_SKIN_COMMAND="docker run … credence-skin@<digest>"
 ```
 
+> ⚠️ **The daemon is required — the hook does nothing without it.** The hook *fails
+> open*: with nothing listening on `:8787`, every tool call just proceeds, so you get
+> **no governance and no error**. Confirm the daemon is up with
+> `curl -s localhost:8787/ready`, and run a session with `CREDENCE_GOVERNOR_DEBUG=1` to
+> watch each decision (and any fail-open) on stderr. The plugin is only the thin hook;
+> install it *and* run the daemon.
+
 **2. Register the hook** — two ways; both end at the same `PreToolUse` hook.
 
 ### Method A — as a Claude Code plugin (recommended; no `pip install`)
 
 The hook is pure stdlib, so the plugin **bundles** it and runs it via
-`${CLAUDE_PLUGIN_ROOT}` — there's nothing to `pip install`. Inside Claude Code, add the
-marketplace, then enable the plugin from the `/plugin` menu:
+`${CLAUDE_PLUGIN_ROOT}` — there's nothing to `pip install`. Three ways, pick one:
+
+**a. Zero-touch — declare it in `settings.json`.** Add this to `~/.claude/settings.json`
+(user scope, all projects); Claude Code registers the marketplace *and* enables the
+plugin at next start, no `/plugin` interaction:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "credence-governor": {
+      "source": { "source": "github", "repo": "gfrmin/credence-governor" }
+    }
+  },
+  "enabledPlugins": {
+    "credence-governor-claude-code@credence-governor": true
+  }
+}
+```
+
+Put the same block in a project's `.claude/settings.json` to offer it to everyone who
+trusts that repo.
+
+**b. One command.** Add the marketplace, then install:
 
 ```
 /plugin marketplace add gfrmin/credence-governor
+/plugin install credence-governor-claude-code@credence-governor
 ```
 
-Now open `/plugin`, find **credence-governor-claude-code** in the list, and enable it
-(`/reload-plugins` activates it in the current session; it's also on in new ones).
-Manage or remove it from the same `/plugin` menu. The plugin reuses the *same*
+(From the shell instead: `claude plugin install
+credence-governor-claude-code@credence-governor`. `--scope project|local` to scope it.)
+
+**c. Interactive.** `/plugin marketplace add gfrmin/credence-governor`, then open
+`/plugin`, find **credence-governor-claude-code** in the Discover list, and install it.
+
+Run `/reload-plugins` to activate in the current session (it's on automatically in new
+ones); manage or remove it from the `/plugin` menu. The plugin reuses the *same*
 `credence_governor_claude_code` package this directory ships — `plugin_hook.py` is a
 thin launcher that puts it on `sys.path` and calls the same entry point the pip console
 script uses (one implementation, two install paths). Manifests:

@@ -65,15 +65,16 @@ It listens on `http://127.0.0.1:8787` (override with `CREDENCE_GOVERNOR_HOST` /
 
 ### Step 2a — govern **Claude Code** (PreToolUse hook)
 
-Install it as a **plugin** — the hook is pure stdlib, so there's no `pip install`.
-Inside Claude Code, add the marketplace:
+Install it as a **plugin** — the hook is pure stdlib, so there's no `pip install`:
 
 ```
 /plugin marketplace add gfrmin/credence-governor
+/plugin install credence-governor-claude-code@credence-governor
 ```
 
-then open `/plugin`, find **credence-governor-claude-code** in the list, and enable it
-(`/reload-plugins` to activate in the current session).
+Or skip the commands entirely: declare `extraKnownMarketplaces` + `enabledPlugins` in
+`~/.claude/settings.json` and it auto-registers and auto-enables at next start — see
+[`adapters/claude-code`](adapters/claude-code).
 
 (Prefer pip? `pip install credence-governor-claude-code && credence-governor-cc-install`
 registers the same hook in `~/.claude/settings.json`.)
