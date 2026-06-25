@@ -51,7 +51,7 @@ image (prod) or a local checkout (dev):
 pip install credence-governor-core      # pulls credence-skin-client
 
 # prod — a pinned engine image:
-CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
+CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin:latest" \
   credence-governor-daemon
 # dev — a local engine checkout instead:
 CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon

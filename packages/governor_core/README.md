@@ -29,7 +29,7 @@ pip install credence-governor-core   # pulls the engine's wire client (credence-
 # dev engine: a local checkout of the Credence engine
 CREDENCE_ENGINE_DIR=/path/to/credence credence-governor-daemon
 # prod: a pinned engine image instead
-CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
+CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin:latest" \
   credence-governor-daemon
 ```
 

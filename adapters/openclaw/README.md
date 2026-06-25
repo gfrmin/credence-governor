@@ -41,7 +41,7 @@ interception point is an OpenClaw **plugin** `before_tool_call` hook.
    `http://127.0.0.1:8787`:
    ```bash
    pip install credence-governor-core   # pulls credence-skin-client
-   CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
+   CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin:latest" \
      credence-governor-daemon
    ```
    (or, against a local engine checkout, `CREDENCE_ENGINE_DIR=/path/to/credence

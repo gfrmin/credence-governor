@@ -72,7 +72,7 @@ transcript turn) is an open design question, deferred.
 
 ```bash
 pip install credence-governor-core   # pulls credence-skin-client
-CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon   # or CREDENCE_SKIN_COMMAND="docker run … credence-skin@<digest>"
+CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon   # or CREDENCE_SKIN_COMMAND="docker run … credence-skin:latest"
 ```
 
 > ⚠️ **The daemon is required — the hook does nothing without it.** The hook *fails
