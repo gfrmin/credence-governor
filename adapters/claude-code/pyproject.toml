@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "credence-governor-claude-code"
+version = "0.1.0"
+description = "Claude Code adapter for credence-governor — a thin PreToolUse hook that Bayesian-governs tool calls (proceed/block/ask) via the governor daemon."
+requires-python = ">=3.11"
+readme = "README.md"
+license = "AGPL-3.0-only"
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+# Runtime is pure stdlib (json, urllib, os): the hook must start fast and fail open.
+# The shared contract with the daemon is the JSON key set, not shared code.
+dependencies = []
+
+[project.scripts]
+credence-governor-claude-code = "credence_governor_claude_code.hook:main"
+credence-governor-cc-install = "credence_governor_claude_code.install:main"
+
+[project.optional-dependencies]
+# governor-core is a TEST-only dep: the round-trip parity test asserts our wire
+# payload deserialises through the daemon's event_and_session_from_payload to the
+# Session the server-side extractors expect.
+dev = ["pytest>=7.4", "ruff", "credence-governor-core"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["credence_governor_claude_code*"]

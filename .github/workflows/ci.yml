@@ -24,6 +24,22 @@ jobs:
       - name: Parity tests
         run: python -m pytest packages/governor_core/tests -q
 
+  claude-code-adapter:
+    name: adapters/claude-code (Python) — lint + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest ruff
+      - name: Lint
+        run: ruff check adapters/claude-code/credence_governor_claude_code
+      # Pure-stdlib at runtime; the round-trip parity test imports governor-core
+      # from the sibling package via sys.path (no install needed).
+      - name: Tests
+        run: python -m pytest adapters/claude-code/tests -q
+
   openclaw-adapter:
     name: adapters/openclaw (TS) — build + tests
     runs-on: ubuntu-latest
