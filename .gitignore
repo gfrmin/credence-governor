@@ -1,0 +1,19 @@
+# Node (TS adapters)
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Python (governor core + python adapters)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# misc
+*.log
+.env
+.DS_Store

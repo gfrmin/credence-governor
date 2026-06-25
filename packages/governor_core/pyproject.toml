@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "credence-governor-core"
+version = "0.1.0"
+description = "Harness- and domain-neutral Bayesian tool-call governance — a pure wire consumer of the Credence engine (credence-skin)."
+requires-python = ">=3.11"
+readme = "README.md"
+license = "AGPL-3.0-only"
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# The wire client to the engine. Pure stdlib otherwise (http.server, json, re).
+dependencies = ["credence-skin-client>=0.1.0"]
+
+[project.scripts]
+credence-governor-daemon = "credence_governor_core:run"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["credence_governor_core*"]
+
+[tool.setuptools.package-data]
+credence_governor_core = ["data/**/*"]

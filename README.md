@@ -1,0 +1,61 @@
+# credence-governor
+
+Bayesian tool-call governance for coding agents — one brain, thin per-harness
+adapters. The agent's tool calls are gated by a Bayesian decision
+(`proceed` / `block` / `ask`) computed by the **Credence** decision engine.
+
+## Architecture — a pure wire consumer
+
+credence-governor carries **zero probabilistic code**. All inference and decisions
+run inside the versioned **`credence-skin`** engine image; the daemon drives it
+over the protocol-versioned JSON-RPC **skin wire** (stdio), holding only opaque
+server-side handles. An app declares its domain as **data** (the `bdsl/` feature
+schema + utility, the `brain/*.counts.json` warm beliefs) and calls the engine's
+verbs; it never holds a probability or does arithmetic on one.
+
+```
+adapters (thin, in the harness's forced language)
+  openclaw/      TS shim  (in-process plugin) ──┐
+  claude-code/   Python hook (subprocess)     ──┤  native events → AgentToolEvent JSON
+                                                ▼ HTTP (/decide, /sensor, /signals)
+  packages/governor_core/  (Python, harness- & domain-neutral)
+    daemon  ·  feature & taint extractors  ·  BrainSession  ── JSON-RPC/stdio ─▶ credence-skin
+    coding-ness = DATA: data/{bdsl,brain,profiles}                               (the Julia engine)
+```
+
+The one abstraction seam is the normalized **`AgentToolEvent` + `Session`**: an
+adapter's only job is `native events → that schema` (+ render the decision).
+Feature/taint extraction is **server-side** (single-sourced in the core), so every
+adapter stays thin. The policy *is* credence — one EU-max reasoner.
+
+| Package | Role |
+|---------|------|
+| `packages/governor_core/` | Python core — daemon, neutral schema, extractors, BrainSession, the `bdsl`/`brain`/`profiles` data. Depends on the engine's `credence-skin-client`. |
+| `adapters/openclaw/` | the OpenClaw plugin body (`@gfrmin/credence-openclaw`) — a thin TS shim forced by OpenClaw's Node runtime. |
+| `adapters/claude-code/` | the Claude Code subprocess-hook adapter (Python). |
+
+## Run the daemon (dev)
+
+```bash
+pip install -e packages/governor_core \
+            -e ~/git/credence/apps/skin/clients/python   # the engine's Python wire client
+CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon
+# prod: CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>"
+```
+
+`POST /decide` `{tool_name, input, session:{cwd,project_root,messages}}` →
+`{action: "proceed"|"block"|"ask"}`. Also `GET /ready`, `GET /report`, and the
+`POST /sensor` + `GET /signals` (SSE) pair for in-process plugins.
+
+## Tests
+
+```bash
+python3 -m pytest packages/governor_core/tests -q        # parity tests (no engine needed)
+```
+
+## Provenance
+
+The Python core ports the harness-agnostic logic from credence-openclaw (itself
+extracted from the Credence engine monorepo, `apps/credence-pi/`). credence-openclaw
+was TypeScript because OpenClaw plugins are TS; generalising to all coding agents
+moved the core to Python and the OpenClaw plugin became one thin adapter among several.
