@@ -2,7 +2,7 @@
   "id": "credence-openclaw",
   "version": "0.1.0",
   "name": "credence-openclaw",
-  "description": "Bayesian routing and governance for OpenClaw — picks the right model per turn (before_model_resolve) and blocks low-EU tool calls (before_tool_call). One brain, one utility function, your cost/quality trade-off.",
+  "description": "Bayesian routing and governance for OpenClaw — picks the right model per turn (before_model_resolve) and blocks low-EU tool calls (before_tool_call). One brain, one utility function, your cost/quality trade-off. Requires the credence-governor daemon on :8787 — without it, routing and governance are a silent no-op (fails open). Start it: credence-governor-daemon.",
   "activation": {
     "onStartup": true
   },
@@ -12,8 +12,13 @@
     "properties": {
       "daemonUrl": {
         "type": "string",
-        "description": "Base URL of the credence-openclaw Julia daemon (POST /sensor, GET /signals).",
+        "description": "Base URL of the credence-governor daemon (POST /sensor, GET /signals). The daemon MUST be running here (default :8787) or governance and routing silently no-op (fail-open). Start it: credence-governor-daemon.",
         "default": "http://127.0.0.1:8787"
+      },
+      "autostartDaemon": {
+        "type": "boolean",
+        "description": "Opt-in: if the governor daemon is down at startup, launch it (credence-governor-daemon, detached). Default false — the plugin only WARNS with the start command, because the daemon is a shared, heavyweight service (boots a docker image / Julia engine, ~18s) used across harnesses. Also enabled by CREDENCE_GOVERNOR_AUTOSTART=1. Never blocks tool calls; a down daemon always fails open.",
+        "default": false
       },
       "hookTimeoutMs": {
         "type": "number",

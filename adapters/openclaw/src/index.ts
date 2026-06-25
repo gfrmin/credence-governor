@@ -22,6 +22,10 @@
 // tests/index.test.ts).
 
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { openSync, closeSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, dirname } from "node:path";
 
 import {
   createDaemonClient,
@@ -52,8 +56,129 @@ const DEFAULT_HOOK_TIMEOUT_MS = 3_000;
 // Distinct from the daemon-decision timeout above.
 const DEFAULT_APPROVAL_TIMEOUT_MS = 120_000;
 
+// The daemon the adapter talks to. Single source for the start command + the "is it up?"
+// probe budget, shared by the startup health-check AND the fail-open warnings (DRY).
+const DAEMON_START_COMMAND = "credence-governor-daemon";
+const AUTOSTART_ENV = "CREDENCE_GOVERNOR_AUTOSTART";
+const READY_PROBE_TIMEOUT_MS = 2_000; // matches logSessionSummary's /report budget
+// Appended to every fail-open warning so the fix is always one copy-paste away.
+const DAEMON_HINT = `Start it: ${DAEMON_START_COMMAND}`;
+
 function newEventId(): string {
   return `evt_${randomUUID().slice(0, 12)}`;
+}
+
+// ── startup daemon health-check ──────────────────────────────────────────────────
+// Proactive: at plugin load, tell the operator if the daemon is down (governance and
+// routing are a silent fail-open no-op without it) with the exact fix — and, only if
+// they opt in, bring it up. A read-only inline GET /ready probe, exactly like
+// logSessionSummary's /report call, so the vendored daemon-client stays verbatim.
+
+/** One-shot GET /ready, AbortController-bounded. Never throws; any error ⇒ false (down). */
+export async function daemonIsReady(
+  daemonUrl: string,
+  timeoutMs: number = READY_PROBE_TIMEOUT_MS,
+): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${daemonUrl.replace(/\/+$/, "")}/ready`, { signal: ctrl.signal });
+      return res.ok;
+    } finally {
+      clearTimeout(t);
+    }
+  } catch {
+    return false; // ECONNREFUSED (down) or timeout (hung) ⇒ treat as down
+  }
+}
+
+/** True for a daemonUrl we may locally autostart (loopback). A remote URL means a daemon
+ * on another host that must not be launched here — warn-only there. */
+export function isLoopbackUrl(daemonUrl: string): boolean {
+  try {
+    const h = new URL(daemonUrl).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    return h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "";
+  } catch {
+    return false;
+  }
+}
+
+/** Spawn the daemon DETACHED so it survives the gateway. The daemon binds the host/port
+ * from `daemonUrl`, so it answers at exactly the URL we probe (not a stale default).
+ * Boot diagnostics go to ~/.credence-governor/daemon.log (so a failed autostart is
+ * debuggable). Fail-open: a missing command (ENOENT — core not installed) is swallowed
+ * via on('error'), never thrown. We never watch the child, so a loser that fails to bind
+ * the port just exits harmlessly (the daemon binds before booting the engine). */
+export function spawnDaemonDetached(daemonUrl: string, log: Logger): void {
+  try {
+    const u = new URL(daemonUrl);
+    const env = {
+      ...process.env,
+      CREDENCE_GOVERNOR_HOST: u.hostname.replace(/^\[|\]$/g, ""),
+      CREDENCE_GOVERNOR_PORT: u.port || "8787",
+    };
+    // Capture the spawned daemon's stdout/stderr to a log file so "why didn't autostart
+    // work?" is answerable; fall back to ignore if the file can't be opened.
+    let stdio: "ignore" | ["ignore", number, number] = "ignore";
+    let logFd: number | undefined;
+    try {
+      const logPath = join(homedir(), ".credence-governor", "daemon.log");
+      mkdirSync(dirname(logPath), { recursive: true });
+      logFd = openSync(logPath, "a");
+      stdio = ["ignore", logFd, logFd];
+    } catch {
+      /* no log file — proceed with ignore */
+    }
+    const child = spawn(DAEMON_START_COMMAND, [], { detached: true, stdio, env });
+    child.on("error", (err) => {
+      log(
+        `credence-openclaw: could not auto-start the daemon (is ${DAEMON_START_COMMAND} ` +
+          `installed?). Install it: pip install credence-governor-core`,
+        err,
+      );
+    });
+    child.unref();
+    if (logFd !== undefined) closeSync(logFd); // the detached child kept its own dup
+  } catch (err) {
+    log("credence-openclaw: daemon auto-start failed (failing open)", err);
+  }
+}
+
+/** Fire-and-forget startup check: silent if up; if down, warn with the start command
+ * (and optionally auto-start). Never throws — preserves the fail-open guarantee. The
+ * injectable deps keep it unit-testable without real fetch/spawn. */
+export async function runStartupDaemonCheck(
+  daemonUrl: string,
+  autostart: boolean,
+  log: Logger,
+  deps: {
+    probe?: (url: string) => Promise<boolean>;
+    spawnDaemon?: (daemonUrl: string, log: Logger) => void;
+  } = {},
+): Promise<void> {
+  const probe = deps.probe ?? ((u: string) => daemonIsReady(u));
+  const spawnDaemon = deps.spawnDaemon ?? spawnDaemonDetached;
+  try {
+    if (await probe(daemonUrl)) return; // up ⇒ silent (no per-start spam)
+    // Autostart only a LOCAL daemon — a remote daemonUrl can't be launched from here.
+    if (autostart && isLoopbackUrl(daemonUrl)) {
+      log(
+        `credence-openclaw: governor daemon is DOWN at ${daemonUrl} — routing and governance ` +
+          `are OFF; auto-starting \`${DAEMON_START_COMMAND}\` (engine boot ~18s; tool calls ` +
+          `proceed UNGUARDED until it is up).`,
+      );
+      spawnDaemon(daemonUrl, log);
+      return;
+    }
+    log(
+      `credence-openclaw: ⚠ governor daemon is DOWN at ${daemonUrl} — routing and governance ` +
+        `are OFF (tool calls proceed UNGUARDED) until it is up. ${DAEMON_HINT}  ` +
+        `(or set autostartDaemon:true / ${AUTOSTART_ENV}=1 to auto-launch it).`,
+    );
+  } catch {
+    /* never let the startup check break plugin load */
+  }
 }
 
 export function mapSignal(
@@ -259,7 +384,8 @@ export function createGovernor(
       if (r) r(undefined); // clean up timer + awaiter
       if (!warnedDown) {
         log(
-          `credence-openclaw: daemon unreachable at the configured URL; proceeding without governance`,
+          `credence-openclaw: daemon unreachable at the configured URL; proceeding WITHOUT ` +
+            `governance (fail-open, no error). ${DAEMON_HINT}`,
         );
         warnedDown = true;
       }
@@ -345,7 +471,9 @@ export function createGovernor(
     if (!post.ok) {
       awaiters.get(eventId)?.(undefined); // clean up timer + awaiter
       if (!warnedDown) {
-        log("credence-openclaw: daemon unreachable; routing skipped (OpenClaw keeps its model)");
+        log(
+          `credence-openclaw: daemon unreachable; routing skipped (OpenClaw keeps its model). ${DAEMON_HINT}`,
+        );
         warnedDown = true;
       }
       down = true;
@@ -447,6 +575,11 @@ const plugin: PluginEntry = {
     const redactToolInputs = cfg.redactToolInputs === true;
     const shadowMode = cfg.shadowMode === true;
     const routingEnabled = cfg.routing !== false; // model routing is ON by default
+    // Opt-in (default OFF): auto-start the daemon if it's down at load. Config key OR
+    // the cross-harness CREDENCE_GOVERNOR_AUTOSTART env — either enables; both default off.
+    const autostartDaemon =
+      cfg.autostartDaemon === true ||
+      ["1", "true", "yes", "on"].includes(String(process.env[AUTOSTART_ENV] ?? "").toLowerCase());
     const priceTable = buildPriceTable(cfg.pricing);
     // The user's utility profile: a named preset (default `balanced`) + an optional per-dial
     // override, resolved to the full weight vector sent with each sensor event. This is how a
@@ -591,6 +724,11 @@ const plugin: PluginEntry = {
     } catch (err) {
       log("credence-openclaw: could not register lifecycle cleanup", err);
     }
+
+    // Proactively tell the operator if the daemon is down (governance/routing are a silent
+    // fail-open no-op without it) with the start command — and auto-start it only if they
+    // opted in. Fire-and-forget: never delays plugin load, never throws (fail-open).
+    void runStartupDaemonCheck(daemonUrl, autostartDaemon, log);
   },
 };
 

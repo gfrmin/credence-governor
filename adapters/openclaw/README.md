@@ -19,6 +19,12 @@ It also logs tool **outcomes** (`after_tool_call`) and reconstructs
 **per-turn cost** (`llm_output` token counts × a price table) so the
 observation log accumulates the data the dollars-saved surface needs.
 
+**Requires the credence-governor daemon on `:8787`.** Without it, every tool call
+proceeds **ungoverned** — no routing, no governance, no error (fail-open). At gateway
+start the plugin logs a warning naming the start command if the daemon is down (set
+`autostartDaemon: true` or `CREDENCE_GOVERNOR_AUTOSTART=1` to have it launch the daemon
+for you). Verify: `curl -s localhost:8787/ready`. Start it: `credence-governor-daemon`.
+
 **Fail-open:** if the daemon is unreachable or slow, the tool proceeds
 (one warning per outage). Governance never blocks the agent on
 infrastructure failure.
@@ -37,15 +43,16 @@ interception point is an OpenClaw **plugin** `before_tool_call` hook.
 ## Install (operator)
 
 1. Start the **governor daemon** — the Python `credence-governor-core`, which runs the
-   one EU-max reasoner over the `credence-skin` engine. It listens on
-   `http://127.0.0.1:8787`:
+   one EU-max reasoner over the `credence-skin` engine on `http://127.0.0.1:8787`.
+   **Zero-config** with docker/podman on PATH (auto-runs the published engine image):
    ```bash
    pip install credence-governor-core   # pulls credence-skin-client
-   CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin:latest" \
-     credence-governor-daemon
+   credence-governor-daemon             # auto-runs ghcr.io/gfrmin/credence-skin:latest
    ```
-   (or, against a local engine checkout, `CREDENCE_ENGINE_DIR=/path/to/credence
-   credence-governor-daemon`). See [`packages/governor_core`](../../packages/governor_core).
+   (Overrides: `CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>"`
+   to pin a digest, or `CREDENCE_ENGINE_DIR=/path/to/credence` for a dev checkout.) See
+   [`packages/governor_core`](../../packages/governor_core). **Until `curl -s
+   localhost:8787/ready` returns `status: ready`, the plugin is a silent no-op.**
 2. Install the plugin into OpenClaw from npm/ClawHub, then enable it:
    ```bash
    openclaw plugins install @gfrmin/credence-openclaw
@@ -53,19 +60,20 @@ interception point is an OpenClaw **plugin** `before_tool_call` hook.
    ```
    (Developing against a checkout? Build it first — `cd adapters/openclaw && npm install
    && npm run build` — then `openclaw plugins install -l adapters/openclaw`.)
-4. **Per-turn cost signal.** On current OpenClaw (≥ 2026.6.2) the `llm_output`
+3. **Per-turn cost signal.** On current OpenClaw (≥ 2026.6.2) the `llm_output`
    cost hook is active out of the box — no extra config. (Older builds gated it
    behind a since-removed `plugins.entries.credence-openclaw.hooks.allowConversationAccess`
    flag; that key is now rejected by the config schema.) Governance —
    allow/block/ask — never depended on it.
-5. Restart the gateway so it picks up the plugin.
-6. Verify it loaded: `openclaw plugins list` shows `credence-openclaw` as `loaded`.
+4. Restart the gateway so it picks up the plugin.
+5. Verify it loaded: `openclaw plugins list` shows `credence-openclaw` as `loaded`.
 
 ## Config (`openclaw.plugin.json` → `configSchema`)
 
 | key | default | meaning |
 |---|---|---|
-| `daemonUrl` | `http://127.0.0.1:8787` | credence-openclaw daemon base URL |
+| `daemonUrl` | `http://127.0.0.1:8787` | credence-governor daemon base URL — **must be running here** or governance/routing silently no-op (fail-open) |
+| `autostartDaemon` | `false` | opt-in: if the daemon is down at startup, launch it (`credence-governor-daemon`, detached). Loopback URLs only. Also enabled by `CREDENCE_GOVERNOR_AUTOSTART=1`; never blocks tool calls |
 | `hookTimeoutMs` | `3000` | max wait for the daemon decision before failing open |
 | `approvalTimeoutMs` | `120000` | how long OpenClaw waits for the user on an `ask` before denying |
 | `redactToolInputs` | `false` | omit tool-call inputs from sensor events (they can carry secrets); ask-preview becomes generic |

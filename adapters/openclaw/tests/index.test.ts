@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 
-import { createGovernor } from "../src/index.js";
+import {
+  createGovernor,
+  daemonIsReady,
+  runStartupDaemonCheck,
+} from "../src/index.js";
 import { buildPriceTable } from "../src/cost.js";
 import { resolveProfile } from "../src/profile.js";
 import type { DaemonClient, SignalEnvelope } from "../src/daemon-client.js";
@@ -332,4 +338,85 @@ test("cleanup: closes the SSE stream", () => {
   assert.equal(h.closed(), false);
   h.gov.cleanup();
   assert.equal(h.closed(), true);
+});
+
+// ── startup daemon health-check ──────────────────────────────────────────────
+const logs = () => {
+  const lines: string[] = [];
+  const log = (m: string) => lines.push(m);
+  return { lines, log };
+};
+
+test("daemonIsReady: real server 200 → true; nothing listening → false", async () => {
+  const srv = createServer((_req, res) => res.end("{}")).listen(0);
+  await new Promise((r) => srv.once("listening", r));
+  const port = (srv.address() as AddressInfo).port;
+  assert.equal(await daemonIsReady(`http://127.0.0.1:${port}`), true);
+  await new Promise((r) => srv.close(r));
+  assert.equal(await daemonIsReady(`http://127.0.0.1:${port}`), false); // refused
+});
+
+test("runStartupDaemonCheck: daemon up → silent, no spawn", async () => {
+  const { lines, log } = logs();
+  let spawned = false;
+  await runStartupDaemonCheck("http://x:8787", true, log, {
+    probe: async () => true,
+    spawnDaemon: () => {
+      spawned = true;
+    },
+  });
+  assert.deepEqual(lines, []);
+  assert.equal(spawned, false);
+});
+
+test("runStartupDaemonCheck: down + autostart OFF → warns with start command, no spawn", async () => {
+  const { lines, log } = logs();
+  let spawned = false;
+  await runStartupDaemonCheck("http://x:8787", false, log, {
+    probe: async () => false,
+    spawnDaemon: () => {
+      spawned = true;
+    },
+  });
+  assert.equal(spawned, false);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /DOWN/);
+  assert.match(lines[0], /credence-governor-daemon/);
+});
+
+test("runStartupDaemonCheck: down + autostart ON (loopback) → spawns + logs autostart", async () => {
+  const { lines, log } = logs();
+  let spawnedUrl: string | undefined;
+  await runStartupDaemonCheck("http://127.0.0.1:8787", true, log, {
+    probe: async () => false,
+    spawnDaemon: (url) => {
+      spawnedUrl = url;
+    },
+  });
+  assert.equal(spawnedUrl, "http://127.0.0.1:8787");
+  assert.match(lines[0], /auto-starting/);
+});
+
+test("runStartupDaemonCheck: down + autostart ON but REMOTE url → warn-only, no spawn", async () => {
+  const { lines, log } = logs();
+  let spawned = false;
+  await runStartupDaemonCheck("http://10.0.0.5:8787", true, log, {
+    probe: async () => false,
+    spawnDaemon: () => {
+      spawned = true;
+    },
+  });
+  assert.equal(spawned, false); // can't launch a remote daemon locally
+  assert.match(lines[0], /DOWN/);
+});
+
+test("runStartupDaemonCheck: never throws even if probe rejects", async () => {
+  const { lines, log } = logs();
+  await runStartupDaemonCheck("http://x:8787", false, log, {
+    probe: async () => {
+      throw new Error("boom");
+    },
+  });
+  // swallowed — fail-open; no crash, no required output
+  assert.ok(Array.isArray(lines));
 });

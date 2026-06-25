@@ -2,7 +2,7 @@
   "name": "@gfrmin/credence-openclaw",
   "version": "0.1.0",
   "type": "module",
-  "description": "Bayesian routing and governance for OpenClaw — picks the right model per turn (before_model_resolve) and blocks low-EU tool calls (before_tool_call). One brain, one utility function, your cost/quality trade-off.",
+  "description": "Bayesian routing and governance for OpenClaw — picks the right model per turn (before_model_resolve) and blocks low-EU tool calls (before_tool_call). One brain, one utility function, your cost/quality trade-off. Requires the credence-governor daemon on :8787 — without it, routing/governance silently no-op (fails open). Start it: credence-governor-daemon.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "AGPL-3.0-or-later",
