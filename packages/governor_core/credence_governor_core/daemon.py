@@ -68,6 +68,11 @@ class Daemon:
         self.log = log
         self.lock = engine_lock
         self.logline = logline
+        # Set once the engine has booted. The server binds + serves BEFORE boot (so a
+        # duplicate daemon fails fast on EADDRINUSE instead of booting a second engine);
+        # until this flips, /ready, /decide and /sensor answer a fast 503 (fail-open),
+        # not a hang. See run() and the handler's ready-gate.
+        self.ready = threading.Event()
         self._subscribers: set[queue.Queue] = set()
         self._subs_lock = threading.Lock()
         self._pending_asks: dict[str, dict[str, str]] = {}
@@ -204,12 +209,22 @@ class Daemon:
                 if url.startswith("/report"):
                     return self._json(200, daemon.report())
                 if url.startswith("/ready") or url == "/":
-                    return self._json(200, {"status": "ready"})
+                    if daemon.ready.is_set():
+                        return self._json(200, {"status": "ready"})
+                    return self._json(503, {"status": "booting"})
                 self.send_response(404)
                 self.end_headers()
 
             def do_POST(self):  # noqa: N802
                 url = self.path or ""
+                # Booting: bound + serving, but the engine isn't ready yet. Answer a fast
+                # 503 (fail-open) so an early tool call proceeds immediately instead of
+                # waiting out the client's timeout — and a duplicate daemon that lost the
+                # bind has already exited rather than booting a second engine.
+                if not daemon.ready.is_set() and (
+                    url.startswith("/decide") or url.startswith("/sensor")
+                ):
+                    return self._json(503, {"status": "booting", "action": "proceed"})
                 if url.startswith("/decide"):
                     try:
                         payload = self._read_body()
@@ -257,8 +272,20 @@ class Daemon:
 
         return Handler
 
-    def serve_forever(self, host: str, port: int) -> ThreadingHTTPServer:
+    def bind(self, host: str, port: int) -> ThreadingHTTPServer:
+        """Construct + bind the HTTP server (claims the port) WITHOUT booting the engine.
+        Binding before the ~18s engine boot is what makes a duplicate daemon fail fast on
+        EADDRINUSE instead of booting a whole second engine. Raises OSError if taken."""
         httpd = ThreadingHTTPServer((host, port), self._handler_class())
         httpd.daemon_threads = True
+        return httpd
+
+    def start(self, httpd: ThreadingHTTPServer) -> None:
+        """Begin accepting requests. Safe to call before the engine is booted — the
+        ready-gate answers 503 (fail-open) on /ready, /decide and /sensor until ready."""
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
+
+    def serve_forever(self, host: str, port: int) -> ThreadingHTTPServer:
+        httpd = self.bind(host, port)
+        self.start(httpd)
         return httpd

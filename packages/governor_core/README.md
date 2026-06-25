@@ -24,17 +24,28 @@ neutral event and drives `proceed` / `block` / `ask` decisions.
 
 ## Install & run
 
+**Zero-config** — with docker or podman on PATH, the daemon auto-runs the published
+engine image (`ghcr.io/gfrmin/credence-skin:latest`); no env vars needed:
+
 ```bash
 pip install credence-governor-core   # pulls the engine's wire client (credence-skin-client)
+credence-governor-daemon             # zero-config: auto-runs the engine via docker/podman
+```
+
+Overrides (resolution order: `CREDENCE_SKIN_COMMAND` → `CREDENCE_ENGINE_DIR` → zero-config):
+
+```bash
+# prod: pin the engine image by digest (reproducible) — highest precedence
+CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
+  credence-governor-daemon
 # dev engine: a local checkout of the Credence engine
 CREDENCE_ENGINE_DIR=/path/to/credence credence-governor-daemon
-# prod: a pinned engine image instead
-CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin:latest" \
-  credence-governor-daemon
 ```
 
 The daemon listens on `http://127.0.0.1:8787` by default
-(`CREDENCE_GOVERNOR_HOST` / `CREDENCE_GOVERNOR_PORT`).
+(`CREDENCE_GOVERNOR_HOST` / `CREDENCE_GOVERNOR_PORT`). **Every adapter is a fail-open
+silent no-op until this daemon answers on `:8787`** — verify with
+`curl -s localhost:8787/ready`.
 
 `POST /decide` `{tool_name, input, session:{cwd, project_root, messages}}` →
 `{action, features, event_id}`.
