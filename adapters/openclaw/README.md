@@ -46,11 +46,13 @@ interception point is an OpenClaw **plugin** `before_tool_call` hook.
    ```
    (or, against a local engine checkout, `CREDENCE_ENGINE_DIR=/path/to/credence
    credence-governor-daemon`). See [`packages/governor_core`](../../packages/governor_core).
-2. Build the plugin: `cd adapters/openclaw && npm install && npm run build`.
-3. Install it into OpenClaw by linking this checkout:
-   `openclaw plugins install -l adapters/openclaw` (once it's on npm:
-   `openclaw plugins install @gfrmin/credence-openclaw`).
-   Then `openclaw plugins enable credence-openclaw`.
+2. Install the plugin into OpenClaw from npm/ClawHub, then enable it:
+   ```bash
+   openclaw plugins install @gfrmin/credence-openclaw
+   openclaw plugins enable credence-openclaw
+   ```
+   (Developing against a checkout? Build it first — `cd adapters/openclaw && npm install
+   && npm run build` — then `openclaw plugins install -l adapters/openclaw`.)
 4. **Per-turn cost signal.** On current OpenClaw (≥ 2026.6.2) the `llm_output`
    cost hook is active out of the box — no extra config. (Older builds gated it
    behind a since-removed `plugins.entries.credence-openclaw.hooks.allowConversationAccess`

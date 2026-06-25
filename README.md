@@ -36,9 +36,9 @@ adapter stays thin. The policy *is* credence — one EU-max reasoner.
 
 ## Install
 
-> The Python packages are **on PyPI** (`credence-governor-core`,
-> `credence-governor-claude-code`). The OpenClaw npm package isn't published yet — build
-> it from a clone of this repo (noted at Step 2b). Requires Python ≥ 3.11; the OpenClaw
+> All packages are published: the Python core/adapter on **PyPI**
+> (`credence-governor-core`, `credence-governor-claude-code`) and the OpenClaw plugin on
+> **npm + ClawHub** (`@gfrmin/credence-openclaw`). Requires Python ≥ 3.11; the OpenClaw
 > adapter also needs Node ≥ 20.
 
 ### Step 1 — the daemon (required for every agent)
@@ -84,11 +84,13 @@ methods and the env table are in [`adapters/claude-code`](adapters/claude-code).
 ### Step 2b — govern **OpenClaw** (in-process plugin)
 
 ```bash
-cd adapters/openclaw && npm install && npm run build
-openclaw plugins install -l .            # link this checkout (once published: openclaw plugins install @gfrmin/credence-openclaw)
+openclaw plugins install @gfrmin/credence-openclaw   # from npm/ClawHub
 openclaw plugins enable credence-openclaw
 # restart the gateway; confirm with: openclaw plugins list
 ```
+
+(Developing against a checkout instead? `cd adapters/openclaw && npm install && npm run
+build && openclaw plugins install -l .`)
 
 The OpenClaw adapter adds **EU-max model routing** on top of governance (on by
 default). Config keys, profiles, and pricing are in
