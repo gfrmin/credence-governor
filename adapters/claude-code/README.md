@@ -71,7 +71,7 @@ transcript turn) is an open design question, deferred.
 [repo quickstart](../../README.md#install). In short, from a clone of the repo:
 
 ```bash
-pip install -e packages/governor_core -e ~/git/credence/apps/skin/clients/python
+pip install credence-governor-core   # pulls credence-skin-client
 CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon   # or CREDENCE_SKIN_COMMAND="docker run … credence-skin@<digest>"
 ```
 
@@ -101,7 +101,7 @@ script uses (one implementation, two install paths). Manifests:
 If you'd rather manage it with pip (or script the registration):
 
 ```bash
-pip install -e adapters/claude-code        # not yet on PyPI; once published: pip install credence-governor-claude-code
+pip install credence-governor-claude-code
 credence-governor-cc-install               # → ~/.claude/settings.json  (idempotent)
 #   --project   → ./.claude/settings.json   ·   --uninstall → remove
 ```

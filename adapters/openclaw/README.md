@@ -38,9 +38,9 @@ interception point is an OpenClaw **plugin** `before_tool_call` hook.
 
 1. Start the **governor daemon** — the Python `credence-governor-core`, which runs the
    one EU-max reasoner over the `credence-skin` engine. It listens on
-   `http://127.0.0.1:8787`. Not yet on PyPI, so install from a clone of the repo:
+   `http://127.0.0.1:8787`:
    ```bash
-   pip install -e packages/governor_core -e ~/git/credence/apps/skin/clients/python
+   pip install credence-governor-core   # pulls credence-skin-client
    CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
      credence-governor-daemon
    ```

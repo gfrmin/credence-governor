@@ -36,24 +36,19 @@ adapter stays thin. The policy *is* credence — one EU-max reasoner.
 
 ## Install
 
-> **Packages are not on PyPI/npm yet** — install from a clone of this repo. The
-> published names (`pip install credence-governor-core`,
-> `openclaw plugins install @gfrmin/credence-openclaw`) are noted where they'll apply
-> once released. Requires Python ≥ 3.11; the OpenClaw adapter also needs Node ≥ 20.
-
-```bash
-git clone https://github.com/gfrmin/credence-governor
-cd credence-governor
-```
+> The Python packages are **on PyPI** (`credence-governor-core`,
+> `credence-governor-claude-code`). The OpenClaw npm package isn't published yet — build
+> it from a clone of this repo (noted at Step 2b). Requires Python ≥ 3.11; the OpenClaw
+> adapter also needs Node ≥ 20.
 
 ### Step 1 — the daemon (required for every agent)
 
-Both adapters talk to one local daemon. It needs the **Credence engine**, supplied
-either as a pinned image (prod) or a local checkout (dev):
+Both adapters talk to one local daemon. Install it from PyPI (it pulls the engine's
+Python wire client automatically), then point it at the **Credence engine** — a pinned
+image (prod) or a local checkout (dev):
 
 ```bash
-pip install -e packages/governor_core \
-            -e ~/git/credence/apps/skin/clients/python   # engine's Python wire client (not yet on PyPI)
+pip install credence-governor-core      # pulls credence-skin-client
 
 # prod — a pinned engine image:
 CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
@@ -78,7 +73,7 @@ Inside Claude Code:
 /plugin install credence-governor-claude-code@credence-governor
 ```
 
-(Prefer pip? `pip install -e adapters/claude-code && credence-governor-cc-install`
+(Prefer pip? `pip install credence-governor-claude-code && credence-governor-cc-install`
 registers the same hook in `~/.claude/settings.json`.)
 
 With the daemon up, tool calls are now gated: `block` → deny, `ask` → prompt;
