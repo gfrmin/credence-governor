@@ -47,15 +47,38 @@ CREDENCE_ENGINE_DIR=~/git/credence credence-governor-daemon
 `{action: "proceed"|"block"|"ask"}`. Also `GET /ready`, `GET /report`, and the
 `POST /sensor` + `GET /signals` (SSE) pair for in-process plugins.
 
+## Govern an agent
+
+**Claude Code** (subprocess hook):
+
+```bash
+pip install credence-governor-claude-code
+credence-governor-cc-install              # register the PreToolUse hook in ~/.claude/settings.json
+```
+
+With the daemon running, tool calls are now gated (`block` → deny, `ask` → prompt;
+`proceed` defers to Claude Code's own rules — the governor only adds friction, never
+removes it). Fail-open: if the daemon is down, tools run normally. See
+[`adapters/claude-code`](adapters/claude-code).
+
+**OpenClaw** (in-process plugin): `openclaw plugins install @gfrmin/credence-openclaw`
+— see [`adapters/openclaw`](adapters/openclaw).
+
 ## Tests
 
 ```bash
-python3 -m pytest packages/governor_core/tests -q        # parity tests (no engine needed)
+python3 -m pytest packages/governor_core/tests -q     # core parity tests (no engine needed)
+python3 -m pytest adapters/claude-code/tests -q       # Claude Code adapter
+cd adapters/openclaw && npm install && npm test       # OpenClaw adapter (TS)
 ```
+
+## License
+
+[AGPL-3.0-or-later](LICENSE).
 
 ## Provenance
 
 The Python core ports the harness-agnostic logic from credence-openclaw (itself
-extracted from the Credence engine monorepo, `apps/credence-pi/`). credence-openclaw
-was TypeScript because OpenClaw plugins are TS; generalising to all coding agents
-moved the core to Python and the OpenClaw plugin became one thin adapter among several.
+extracted from the Credence engine). credence-openclaw was TypeScript because OpenClaw
+plugins are TS; generalising to all coding agents moved the core to Python and the
+OpenClaw plugin became one thin adapter among several.

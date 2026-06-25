@@ -23,29 +23,33 @@ observation log accumulates the data the dollars-saved surface needs.
 (one warning per outage). Governance never blocks the agent on
 infrastructure failure.
 
-This is one of two bodies over the same brain; the other,
-`apps/credence-openclaw/extension/`, targets the pi coding agent directly.
-Brain + wire (POST `/sensor`, SSE `/signals`) are shared and unchanged.
+This is the OpenClaw adapter of [credence-governor](https://github.com/gfrmin/credence-governor):
+one of several thin bodies over the same brain (the Python `governor_core` daemon,
+which talks to the `credence-skin` engine). The Claude Code adapter is its sibling.
+The daemon wire (POST `/sensor`, SSE `/signals`) is shared across adapters.
 
 ## Why a plugin (not a pi extension)
 
 Current OpenClaw vendors pi's coding-agent and runs its gateway agent with
 `noExtensions: true`, so a pi `ExtensionFactory` never loads. The supported
-interception point is an OpenClaw **plugin** `before_tool_call` hook. See
-`docs/credence-openclaw-pass-2/move-1-design.md`.
+interception point is an OpenClaw **plugin** `before_tool_call` hook.
 
 ## Install (operator)
 
-1. Start the brain daemon — it listens on `http://127.0.0.1:8787`. Detached +
-   restart-resilient: `docker run -d --name credence-openclaw --restart unless-stopped -p
-   127.0.0.1:8787:8787 -v ~/.credence-openclaw:/root/.credence-openclaw ghcr.io/gfrmin/credence-openclaw-daemon`
-   (or `docker compose -f ../docker-compose.yml up -d`, or from source:
-   `julia --project=<repo-root> apps/credence-openclaw/daemon/main.jl`).
-   See `apps/credence-openclaw/daemon/README.md`.
-2. Build the plugin: `cd apps/credence-openclaw/openclaw-plugin && npm install && npm run build`.
+1. Start the **governor daemon** — the Python `credence-governor-core`, which runs the
+   one EU-max reasoner over the `credence-skin` engine. It listens on
+   `http://127.0.0.1:8787`:
+   ```bash
+   pip install credence-governor-core
+   CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>" \
+     credence-governor-daemon
+   ```
+   (or, against a local engine checkout, `CREDENCE_ENGINE_DIR=/path/to/credence
+   credence-governor-daemon`). See [`packages/governor_core`](../../packages/governor_core).
+2. Build the plugin: `cd adapters/openclaw && npm install && npm run build`.
 3. Install it into OpenClaw. From a published registry:
    `openclaw plugins install @gfrmin/credence-openclaw`; or link a local
-   checkout for development: `openclaw plugins install -l apps/credence-openclaw/openclaw-plugin`.
+   checkout for development: `openclaw plugins install -l adapters/openclaw`.
    Then `openclaw plugins enable credence-openclaw`.
 4. **Per-turn cost signal.** On current OpenClaw (≥ 2026.6.2) the `llm_output`
    cost hook is active out of the box — no extra config. (Older builds gated it

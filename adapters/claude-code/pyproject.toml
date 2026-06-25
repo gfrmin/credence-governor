@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Claude Code adapter for credence-governor — a thin PreToolUse hook that Bayesian-governs tool calls (proceed/block/ask) via the governor daemon."
 requires-python = ">=3.11"
 readme = "README.md"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-or-later"
+authors = [{ name = "Guy Freeman" }]
 classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -17,6 +18,10 @@ classifiers = [
 # Runtime is pure stdlib (json, urllib, os): the hook must start fast and fail open.
 # The shared contract with the daemon is the JSON key set, not shared code.
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/gfrmin/credence-governor"
+Repository = "https://github.com/gfrmin/credence-governor"
 
 [project.scripts]
 credence-governor-claude-code = "credence_governor_claude_code.hook:main"
