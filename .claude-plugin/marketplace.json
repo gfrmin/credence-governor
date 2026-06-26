@@ -11,7 +11,7 @@
       "name": "credence-governor-claude-code",
       "source": "./adapters/claude-code",
       "description": "PreToolUse hook that Bayesian-governs Claude Code tool calls (proceed/block/ask) via the credence-governor daemon. Requires the credence-governor daemon on :8787; fails open (silent no-op) if down. Start it: credence-governor-daemon.",
-      "version": "0.4.0"
+      "version": "0.5.0"
     }
   ]
 }

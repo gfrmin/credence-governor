@@ -1,7 +1,7 @@
 {
   "name": "credence-governor-claude-code",
   "description": "Bayesian PreToolUse governance for Claude Code (proceed/block/ask). Requires the credence-governor daemon on :8787 — without it every tool call proceeds ungoverned (fails open, silently). Start it: credence-governor-daemon. Adds friction (deny/ask) only; never weakens the host's own permission prompts.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": {
     "name": "Guy Freeman"
   },
