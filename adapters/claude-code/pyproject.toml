@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "credence-governor-claude-code"
-version = "0.5.0"
+version = "0.6.0"
 description = "Claude Code adapter for credence-governor — a thin PreToolUse hook that Bayesian-governs tool calls (proceed/block/ask) via the governor daemon. Requires the credence-governor daemon on :8787 — fails open (silent no-op) without it. Start it: credence-governor-daemon."
 requires-python = ">=3.11"
 readme = "README.md"

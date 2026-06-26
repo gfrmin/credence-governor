@@ -80,6 +80,23 @@ returns `{"status":"ready"}`, both adapters are a silent fail-open no-op.**
 `{action: "proceed"|"block"|"ask"}`; also `GET /report` and the
 `POST /sensor` + `GET /signals` (SSE) pair for in-process plugins.
 
+**Keep it running (systemd user service).** So the daemon autostarts at login,
+restarts on crash, and outlives any terminal, install the shipped unit
+([`packages/governor_core/deploy/credence-governor.service`](packages/governor_core/deploy/credence-governor.service)):
+
+```bash
+uv tool install credence-governor-core          # binary on PATH at ~/.local/bin
+mkdir -p ~/.config/systemd/user
+cp packages/governor_core/deploy/credence-governor.service ~/.config/systemd/user/
+loginctl enable-linger "$USER"                   # survive logout / reboot
+systemctl --user enable --now credence-governor.service
+```
+
+Manage it with `systemctl --user {status,restart,stop} credence-governor` and
+`journalctl --user -u credence-governor -f`. After `uv tool upgrade
+credence-governor-core`, run `systemctl --user restart credence-governor` to pick
+up the new version.
+
 ### Step 2a — govern **Claude Code** (PreToolUse hook)
 
 Install it as a **plugin** — the hook is pure stdlib, so there's no `pip install`:

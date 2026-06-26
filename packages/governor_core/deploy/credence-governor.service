@@ -1,0 +1,35 @@
+# Credence Governor daemon as a systemd *user* service — autostarts at login,
+# restarts on crash, survives terminal/session exit. The body's fail-open means
+# a down daemon never blocks tools, but keeping it up is what adds governance.
+#
+# Install (assumes `uv tool install credence-governor-core`, which puts the
+# binary at ~/.local/bin/credence-governor-daemon; adjust ExecStart if elsewhere):
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp packages/governor_core/deploy/credence-governor.service ~/.config/systemd/user/
+#   loginctl enable-linger "$USER"        # run even when not logged in / across reboots
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now credence-governor.service
+#   curl -s localhost:8787/ready          # {"status":"ready"} after the ~10-20s engine boot
+#
+# After upgrading the package (`uv tool upgrade credence-governor-core`):
+#   systemctl --user restart credence-governor.service
+
+[Unit]
+Description=Credence Governor daemon (Bayesian tool-call governance) on :8787
+Documentation=https://github.com/gfrmin/credence-governor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# The engine launcher (docker/podman) must be on PATH; the daemon lives in ~/.local/bin.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/credence-governor-daemon
+Restart=on-failure
+RestartSec=3
+# Give the Julia engine room to cold-boot (image pull + precompile) before restart logic.
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target
