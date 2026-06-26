@@ -81,3 +81,28 @@ def test_shadow_never_enforces():
         out = shadow_output(action, "X")
         if out is not None:
             assert "hookSpecificOutput" not in out
+
+
+# ── category-aware enforcement: waste-block is overridable, safety-block is hard ──
+
+
+def test_waste_block_is_overridable_ask():
+    out = pretooluse_output("block", "Bash", "waste")
+    assert out["hookSpecificOutput"]["permissionDecision"] == "ask"  # you can override
+    assert "approve" in out["systemMessage"].lower()  # and it tells you how to stop asking
+
+
+def test_safety_block_stays_hard_deny():
+    out = pretooluse_output("block", "Bash", "safety")
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_block_without_category_defaults_to_hard_deny():
+    # conservative when the daemon didn't classify (or an older daemon sent no category)
+    assert pretooluse_output("block", "Bash")["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_shadow_waste_block_narrates_without_enforcing():
+    out = shadow_output("block", "Bash", "waste")
+    assert "hookSpecificOutput" not in out
+    assert "Bash" in out["systemMessage"]

@@ -54,10 +54,11 @@ def handle(hook_input: dict[str, Any]) -> dict[str, Any] | None:
         payload["profile"] = profile
     result = client.decide(payload)
     action = str(result.get("action") or "proceed")
-    _debug(f"{payload['tool_name']} -> {action} ({result.get('features')})")
+    category = result.get("category")  # safety|waste — a waste block is overridable
+    _debug(f"{payload['tool_name']} -> {action}/{category} ({result.get('features')})")
     if _shadow():
-        return effectors.shadow_output(action, payload["tool_name"])
-    return effectors.pretooluse_output(action, payload["tool_name"])
+        return effectors.shadow_output(action, payload["tool_name"], category)
+    return effectors.pretooluse_output(action, payload["tool_name"], category)
 
 
 def main() -> int:

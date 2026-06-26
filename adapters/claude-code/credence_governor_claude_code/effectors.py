@@ -1,77 +1,79 @@
 """effectors.py — a governor action -> a Claude Code PreToolUse decision.
 
-The governor is an OVERLAY on Claude Code's native permission system, so it may only
-ever ADD restriction, never remove it:
+The governor is an OVERLAY on Claude Code's native permission system: it may only ADD
+restriction, never remove it. The brain emits proceed/block/ask; the body maps that to a
+permissionDecision, refining `block` by the decision's category (from the daemon's /decide):
 
-  proceed -> None        (emit nothing: defer to Claude Code's own permission rules)
-  block   -> deny        (refuse regardless of native rules)
-  ask     -> ask         (force a user prompt even if native rules would auto-allow)
+  proceed              -> None   (defer to Claude Code's own rules)
+  block + safety       -> deny   (hard refuse — taint/exfil/destructive; no override)
+  block + waste        -> ask    (OVERRIDABLE — flagged as likely a loop; you decide)
+  block (no category)  -> deny   (conservative default when the daemon didn't classify)
+  ask                  -> ask    (force a prompt even if native rules would auto-allow)
 
-We deliberately never emit permissionDecision "allow": that would bypass Claude
-Code's native safety prompts, i.e. the governance layer weakening the host. A
-returned None means "print nothing", which leaves the call to the normal flow.
-
-Every ENFORCED decision (block/ask) also carries a top-level `systemMessage`, which
-Claude Code shows to the USER. The permissionDecisionReason alone is easy to miss
-(it reads mostly to the model), so the governor's action is never silent — see
-test_effectors.test_block_carries_visible_system_message.
-
-`shadow_output` is the observe-only counterpart (CREDENCE_GOVERNOR_SHADOW): it NEVER
-enforces (no permissionDecision => the tool proceeds) but narrates what the governor
-WOULD have done, so you can measure governance on real usage without being gated.
+We never emit permissionDecision "allow" — that would weaken the host's own prompts. Every
+enforced decision carries a top-level user-visible `systemMessage`; the waste case also says
+how to make it stop (credence-governor-feedback). `shadow_output` narrates the same WITHOUT
+enforcing (CREDENCE_GOVERNOR_SHADOW) — see test_effectors.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-_DECISION = {"proceed": None, "block": "deny", "ask": "ask"}
+# A block is overridable only when the daemon classified it `waste`; otherwise (safety, or an
+# older daemon that sent no category) it stays a hard deny — conservative when info is missing.
+_PERMISSION = {"block-hard": "deny", "block-waste": "ask", "ask-confirm": "ask"}
 
 
-def _reason(action: str, tool_name: str) -> str:
-    tool = tool_name or "this tool"
+def _kind(action: str, category: str | None) -> str | None:
     if action == "block":
-        return f"credence-governor refused `{tool}`: low expected utility under the current belief (likely a loop or unsafe action)."
-    return f"credence-governor wants confirmation before `{tool}` runs."
+        return "block-waste" if category == "waste" else "block-hard"
+    if action == "ask":
+        return "ask-confirm"
+    return None  # proceed / unknown -> defer
 
 
-def _system_message(action: str, tool_name: str, *, shadow: bool) -> str | None:
-    """The user-visible one-liner for an enforced (or shadowed) decision, or None
-    when there is nothing to say (proceed / unknown action)."""
-    tool = tool_name or "this tool"
-    if action not in ("block", "ask"):
-        return None
+def _reason(kind: str, tool: str) -> str:
+    return {
+        "block-hard": f"credence-governor refused `{tool}`: low expected utility under the current belief (likely unsafe).",
+        "block-waste": f"credence-governor flags `{tool}` as low expected utility (likely a loop/waste). Approve to run anyway; `credence-governor-feedback reject` if it was right to stop.",
+        "ask-confirm": f"credence-governor wants confirmation before `{tool}` runs.",
+    }[kind]
+
+
+def _system_message(kind: str, tool: str, *, shadow: bool) -> str:
     if shadow:
-        would = "block" if action == "block" else "ask before"
+        would = {"block-hard": "block", "block-waste": "flag as waste", "ask-confirm": "ask before"}[kind]
         return f"credence-governor [shadow]: would {would} `{tool}` — observing only, not enforcing."
-    if action == "block":
-        return f"credence-governor: blocked `{tool}` (low expected utility — likely a loop/unsafe action). Disable with /plugin."
-    return f"credence-governor: asking for confirmation before `{tool}` runs."
+    return {
+        "block-hard": f"credence-governor: blocked `{tool}` (low expected utility / unsafe). Disable with /plugin.",
+        "block-waste": f"credence-governor: `{tool}` looks like waste/a loop — approve to run anyway. To stop asking, run: credence-governor-feedback approve.",
+        "ask-confirm": f"credence-governor: asking for confirmation before `{tool}` runs.",
+    }[kind]
 
 
-def pretooluse_output(action: str, tool_name: str = "") -> dict[str, Any] | None:
-    """The JSON to print on stdout for a PreToolUse hook, or None to print nothing
-    (proceed / unknown action -> defer to Claude Code). Enforced decisions also carry
-    a user-visible `systemMessage`."""
-    decision = _DECISION.get(action)
-    if decision is None:
+def pretooluse_output(action: str, tool_name: str = "", category: str | None = None) -> dict[str, Any] | None:
+    """The JSON to print for a PreToolUse hook, or None to defer (proceed / unknown). A
+    waste-block is an OVERRIDABLE ask; a safety/unclassified block is a hard deny. Enforced
+    decisions carry a user-visible systemMessage."""
+    kind = _kind(action, category)
+    if kind is None:
         return None
-    out: dict[str, Any] = {
+    tool = tool_name or "this tool"
+    return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": decision,
-            "permissionDecisionReason": _reason(action, tool_name),
-        }
+            "permissionDecision": _PERMISSION[kind],
+            "permissionDecisionReason": _reason(kind, tool),
+        },
+        "systemMessage": _system_message(kind, tool, shadow=False),
     }
-    msg = _system_message(action, tool_name, shadow=False)
-    if msg:
-        out["systemMessage"] = msg
-    return out
 
 
-def shadow_output(action: str, tool_name: str = "") -> dict[str, Any] | None:
-    """Observe-only: NEVER enforce (no permissionDecision => the tool proceeds), but
-    surface what the governor WOULD have done as a user-visible `systemMessage`. None
-    when the decision was proceed (nothing to narrate)."""
-    msg = _system_message(action, tool_name, shadow=True)
-    return {"systemMessage": msg} if msg else None
+def shadow_output(action: str, tool_name: str = "", category: str | None = None) -> dict[str, Any] | None:
+    """Observe-only: NEVER enforce (no permissionDecision => the tool proceeds), but narrate
+    what the governor WOULD have done. None when the decision was proceed."""
+    kind = _kind(action, category)
+    if kind is None:
+        return None
+    return {"systemMessage": _system_message(kind, tool_name or "this tool", shadow=True)}

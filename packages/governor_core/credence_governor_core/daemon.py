@@ -48,6 +48,23 @@ def _ask_text(proposed: Any) -> str:
     return f"Allow `{tool}` to run with input `{s}`?"
 
 
+# A block is "safety" iff the ATTACK-PATTERN features are hot — taint flowing to a sink/
+# external target, a credential-exfil chain, or an injected imperative. These are the
+# "the agent may be acting against the user" signals where override should not be offered.
+# We deliberately do NOT key on `action-class` (delete/exec/external-send): that's the action
+# *type*, not the block's *motivation* — a repeated `rm` flagged as a waste loop must stay
+# OVERRIDABLE, not be hard-denied for being destructive. Everything else is waste (the body
+# may offer override). Deterministic feature inspection, no belief arithmetic — so it lives
+# here (server-side), not in the thin adapter (Invariant 1).
+def _block_category(features: dict[str, str]) -> str:
+    hot = (
+        features.get("taint-flow", "none") != "none"
+        or features.get("cred-exfil-chain", "no") == "yes"
+        or features.get("injected-imperative", "no") == "yes"
+    )
+    return "safety" if hot else "waste"
+
+
 def _action_signal(action: str, proposed: Any) -> dict[str, Any]:
     if action == "ask":
         return {"effector": "ask", "parameters": {"text": _ask_text(proposed)}}
@@ -115,7 +132,7 @@ class Daemon:
             action = self.session.decide(features, features, payload.get("profile"))
         self.log.append({"event_type": "tool-proposed", "event_id": event_id, "features": features})
         self.log.append({"event_type": "decision", "in_response_to": event_id, "action": action})
-        return {"action": action, "features": features, "event_id": event_id}
+        return {"action": action, "features": features, "event_id": event_id, "category": _block_category(features)}
 
     # ── explicit human feedback (Claude Code has no onResolution; close the loop here) ──
     def _features_for_event(self, event_id: str) -> dict[str, str] | None:

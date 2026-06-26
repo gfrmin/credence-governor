@@ -35,3 +35,12 @@ def test_shadow_proceed_is_silent(monkeypatch):
 
 def test_non_pretooluse_defers(monkeypatch):
     assert hook.handle({"hook_event_name": "PostToolUse"}) is None
+
+
+def test_waste_category_makes_block_overridable(monkeypatch):
+    # the hook threads /decide's category through to effectors: a waste block -> ask
+    monkeypatch.delenv("CREDENCE_GOVERNOR_SHADOW", raising=False)
+    monkeypatch.setattr(hook.transcript, "session_from_hook", lambda _hi: {"tool_name": "Bash"})
+    monkeypatch.setattr(hook.client, "decide", lambda _p: {"action": "block", "category": "waste", "features": {}})
+    out = hook.handle({"hook_event_name": "PreToolUse"})
+    assert out["hookSpecificOutput"]["permissionDecision"] == "ask"
