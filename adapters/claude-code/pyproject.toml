@@ -27,6 +27,7 @@ Repository = "https://github.com/gfrmin/credence-governor"
 credence-governor-claude-code = "credence_governor_claude_code.hook:main"
 credence-governor-cc-session-start = "credence_governor_claude_code.session_start:main"
 credence-governor-cc-install = "credence_governor_claude_code.install:main"
+credence-governor-feedback = "credence_governor_claude_code.feedback:main"
 
 [project.optional-dependencies]
 # governor-core is a TEST-only dep: the round-trip parity test asserts our wire

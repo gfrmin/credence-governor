@@ -117,6 +117,52 @@ class Daemon:
         self.log.append({"event_type": "decision", "in_response_to": event_id, "action": action})
         return {"action": action, "features": features, "event_id": event_id}
 
+    # ── explicit human feedback (Claude Code has no onResolution; close the loop here) ──
+    def _features_for_event(self, event_id: str) -> dict[str, str] | None:
+        """Recover the features logged at decide-time for a past event. The sync /decide
+        path logs tool-proposed{event_id, features}; the SSE path's in-memory _pending_asks
+        is not populated for hooks, so we read the log. Most recent match wins."""
+        feats: dict[str, str] | None = None
+        for r in self.log.read():
+            if r.get("event_type") == "tool-proposed" and r.get("event_id") == event_id and r.get("features"):
+                feats = r["features"]
+        return feats
+
+    def _last_gated_event_id(self) -> str | None:
+        """The most recent decision the governor actually GATED (block/ask) — what a user
+        means by "correct the last decision" (a proceed never interrupted them, so it should
+        not be shadowed in front of the block that did). Falls back to the last proposed
+        event if nothing was gated."""
+        gated: str | None = None
+        last_proposed: str | None = None
+        for r in self.log.read():
+            et = r.get("event_type")
+            if et == "tool-proposed" and isinstance(r.get("event_id"), str):
+                last_proposed = r["event_id"]
+            elif et == "decision" and r.get("action") in ("block", "ask") and isinstance(r.get("in_response_to"), str):
+                gated = r["in_response_to"]
+        return gated or last_proposed
+
+    def feedback(self, event_id: str | None, observation: int) -> dict[str, Any]:
+        """Record a human verdict on a past decision and condition the governance belief —
+        the Claude Code analogue of OpenClaw's onResolution → user-responded → observe.
+        event_id None => the most recent decision. Reuses the existing observe/replay path:
+        the appended user-responded record is exactly what replay_contexts() re-applies on
+        boot, so the correction survives a restart (order-independent => exact)."""
+        eid = event_id or self._last_gated_event_id()
+        if not eid:
+            return {"ok": False, "error": "no decision on record to correct"}
+        features = self._features_for_event(eid)
+        if features is None:
+            return {"ok": False, "error": f"unknown event_id {eid}"}
+        obs = 1 if observation else 0
+        self.log.append(
+            {"event_type": "user-responded", "in_response_to": eid, "response": "yes" if obs else "no", "human": True}
+        )
+        with self.lock:
+            self.session.observe(features, obs)
+        return {"ok": True, "event_id": eid, "observation": obs}
+
     # ── the async sensor dispatch (in-process plugins) ──
     def dispatch(self, event: dict[str, Any]) -> None:
         typ = str(event.get("event_type") or "")
@@ -221,10 +267,13 @@ class Daemon:
                 # 503 (fail-open) so an early tool call proceeds immediately instead of
                 # waiting out the client's timeout — and a duplicate daemon that lost the
                 # bind has already exited rather than booting a second engine.
-                if not daemon.ready.is_set() and (
-                    url.startswith("/decide") or url.startswith("/sensor")
-                ):
-                    return self._json(503, {"status": "booting", "action": "proceed"})
+                if not daemon.ready.is_set():
+                    if url.startswith("/decide") or url.startswith("/sensor"):
+                        return self._json(503, {"status": "booting", "action": "proceed"})
+                    if url.startswith("/feedback"):
+                        # feedback conditions the belief, which needs the engine — can't fail
+                        # open into a no-op; tell the caller to retry once ready.
+                        return self._json(503, {"ok": False, "status": "booting", "error": "daemon still booting"})
                 if url.startswith("/decide"):
                     try:
                         payload = self._read_body()
@@ -239,6 +288,15 @@ class Daemon:
                     except Exception as err:  # fail-open
                         daemon.logline(f"credence-governor: sensor error (failing open): {err}")
                     return self._json(200, {"ack": True})
+                if url.startswith("/feedback"):
+                    try:
+                        payload = self._read_body()
+                        if "observation" not in payload:
+                            return self._json(400, {"ok": False, "error": "observation (0|1) required"})
+                        return self._json(200, daemon.feedback(payload.get("event_id"), int(payload["observation"])))
+                    except Exception as err:
+                        daemon.logline(f"credence-governor: /feedback error: {err}")
+                        return self._json(400, {"ok": False, "error": str(err)})
                 self.send_response(404)
                 self.end_headers()
 
