@@ -32,6 +32,25 @@ pip install credence-governor-core   # pulls the engine's wire client (credence-
 credence-governor-daemon             # zero-config: auto-runs the engine via docker/podman
 ```
 
+**With [uv](https://docs.astral.sh/uv/)** — no separate install step. The package is
+`credence-governor-core` but the console script is `credence-governor-daemon`, so the
+`--from` is **required** (`uvx` otherwise looks for a PyPI package matching the command name):
+
+```bash
+# one-off / ephemeral — re-resolves each run (cached after the first):
+uvx --from credence-governor-core credence-governor-daemon
+
+# persistent — installs `credence-governor-daemon` onto PATH (~/.local/bin):
+uv tool install credence-governor-core
+credence-governor-daemon
+```
+
+Prefer `uv tool install` for a long-lived service, and **required** if you use an adapter's
+opt-in **autostart** — it spawns the bare `credence-governor-daemon`, which must be on PATH
+(an ephemeral `uvx` install is not). `uvx` is ideal for a quick "spin it up to test". Either
+way uv supplies only the Python host; the engine still comes from docker/podman (or the
+overrides below).
+
 Overrides (resolution order: `CREDENCE_SKIN_COMMAND` → `CREDENCE_ENGINE_DIR` → zero-config):
 
 ```bash

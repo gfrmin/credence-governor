@@ -57,6 +57,12 @@ pip install credence-governor-core      # pulls credence-skin-client
 credence-governor-daemon                # zero-config: auto-runs the engine via docker/podman
 ```
 
+Using **[uv](https://docs.astral.sh/uv/)**? `uvx --from credence-governor-core
+credence-governor-daemon` for a one-off run, or `uv tool install credence-governor-core` to
+put `credence-governor-daemon` on PATH (the form an adapter's autostart needs). The `--from`
+is required — the package (`credence-governor-core`) and script (`credence-governor-daemon`)
+names differ.
+
 Overrides, if you need them — pin a digest in prod, or use a dev engine checkout:
 
 ```bash

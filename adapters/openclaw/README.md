@@ -49,6 +49,9 @@ interception point is an OpenClaw **plugin** `before_tool_call` hook.
    pip install credence-governor-core   # pulls credence-skin-client
    credence-governor-daemon             # auto-runs ghcr.io/gfrmin/credence-skin:latest
    ```
+   (With [uv](https://docs.astral.sh/uv/): `uvx --from credence-governor-core credence-governor-daemon`
+   for a one-off, or `uv tool install credence-governor-core` to put it on PATH — the form
+   `autostartDaemon` needs. The `--from` is required: package and script names differ.)
    (Overrides: `CREDENCE_SKIN_COMMAND="docker run --rm -i ghcr.io/gfrmin/credence-skin@sha256:<digest>"`
    to pin a digest, or `CREDENCE_ENGINE_DIR=/path/to/credence` for a dev checkout.) See
    [`packages/governor_core`](../../packages/governor_core). **Until `curl -s
