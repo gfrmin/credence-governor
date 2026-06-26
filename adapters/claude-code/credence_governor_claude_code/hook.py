@@ -31,6 +31,13 @@ def _debug(msg: str) -> None:
         sys.stderr.write(f"credence-governor: {msg}\n")
 
 
+def _shadow() -> bool:
+    """Observe-only mode: the daemon still decides + logs, but the body never enforces
+    (parity with the OpenClaw adapter's shadowMode). Safe way to run the governor while
+    its beliefs are still being calibrated."""
+    return os.environ.get("CREDENCE_GOVERNOR_SHADOW", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _read_stdin() -> dict[str, Any]:
     raw = sys.stdin.read()
     return json.loads(raw) if raw and raw.strip() else {}
@@ -48,6 +55,8 @@ def handle(hook_input: dict[str, Any]) -> dict[str, Any] | None:
     result = client.decide(payload)
     action = str(result.get("action") or "proceed")
     _debug(f"{payload['tool_name']} -> {action} ({result.get('features')})")
+    if _shadow():
+        return effectors.shadow_output(action, payload["tool_name"])
     return effectors.pretooluse_output(action, payload["tool_name"])
 
 

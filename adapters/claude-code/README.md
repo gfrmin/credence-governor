@@ -73,6 +73,8 @@ transcript turn) is an open design question, deferred.
 ```bash
 pip install credence-governor-core   # pulls credence-skin-client
 credence-governor-daemon             # zero-config: auto-runs the engine via docker/podman
+#   with uv:   uvx --from credence-governor-core credence-governor-daemon   (one-off; --from required)
+#              uv tool install credence-governor-core  → puts it on PATH (needed for autostart, below)
 #   overrides: CREDENCE_ENGINE_DIR=~/git/credence  (dev checkout)  ·  CREDENCE_SKIN_COMMAND=…  (pin a digest)
 ```
 
@@ -156,6 +158,7 @@ is needed only for the daemon and the parity test. Static config example:
 | `CREDENCE_GOVERNOR_TIMEOUT` | `5.0` | per-call `/decide` timeout (s); on timeout → fail open |
 | `CREDENCE_GOVERNOR_PROFILE` | *(none)* | utility profile passed to the daemon (e.g. `flow-guard`) |
 | `CREDENCE_GOVERNOR_DEBUG` | *(off)* | log decisions/failures to stderr |
+| `CREDENCE_GOVERNOR_SHADOW` | *(off)* | truthy → **observe-only**: the daemon still decides and logs, but the hook never enforces (block/ask become a `systemMessage` saying what it *would* do). The safe way to run while beliefs are still being calibrated; parity with the OpenClaw adapter's `shadowMode`. |
 | `CREDENCE_GOVERNOR_AUTOSTART` | *(off)* | truthy → the SessionStart hook auto-starts the daemon (detached) if it's down |
 | `CREDENCE_GOVERNOR_AUTOSTART_WAIT` | `8.0` | post-autostart `/ready` poll budget (s) before reporting STARTING |
 | `CREDENCE_GOVERNOR_READY_TIMEOUT` | `1.5` | SessionStart `/ready` probe timeout (s) |

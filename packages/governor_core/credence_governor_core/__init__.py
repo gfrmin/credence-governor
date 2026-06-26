@@ -157,7 +157,7 @@ def _print_banner(
 ) -> None:
     bar = "=" * 64
     log(bar)
-    log("  credence-governor daemon — Bayesian tool-call governance")
+    log("  credence-governor READY -- now governing every tool call")
     log(f"  listening   http://{host}:{port}   (GET /ready - POST /decide - GET /report)")
     log("  Adapters (Claude Code hook - OpenClaw plugin) ask THIS daemon")
     log("  for every tool call. Daemon down => adapters FAIL OPEN: tools")
@@ -177,7 +177,7 @@ def run() -> None:
         os.path.join(os.path.expanduser("~"), ".credence-governor", "observations.jsonl"),
     )
 
-    _stdout("credence-governor: starting (resolving engine, booting beliefs)…")
+    _stdout("credence-governor: starting — resolving engine…")
     log = ObservationLog(log_path)
     skin = build_skin_client()  # prints engine provenance + any pull progress
     engine_lock = threading.Lock()
@@ -199,6 +199,11 @@ def run() -> None:
 
     daemon.start(httpd)
     try:
+        _stdout(
+            f"credence-governor: bound http://{host}:{port} — booting engine & warming "
+            "beliefs… ~10-20s (first run also pulls the image). Tool calls FAIL OPEN "
+            "(proceed ungoverned) until ready."
+        )
         session.boot()
         daemon.ready.set()  # engine up → answer real decisions
         _print_banner(host, port, brain_dir, log_path, _stdout)
