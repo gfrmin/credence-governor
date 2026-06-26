@@ -48,17 +48,25 @@ def _ask_text(proposed: Any) -> str:
     return f"Allow `{tool}` to run with input `{s}`?"
 
 
-# A block is "safety" iff the ATTACK-PATTERN features are hot — taint flowing to a sink/
-# external target, a credential-exfil chain, or an injected imperative. These are the
-# "the agent may be acting against the user" signals where override should not be offered.
-# We deliberately do NOT key on `action-class` (delete/exec/external-send): that's the action
-# *type*, not the block's *motivation* — a repeated `rm` flagged as a waste loop must stay
-# OVERRIDABLE, not be hard-denied for being destructive. Everything else is waste (the body
-# may offer override). Deterministic feature inspection, no belief arithmetic — so it lives
-# here (server-side), not in the thin adapter (Invariant 1).
+# A block is "safety" (hard deny, no override offered) iff an ATTACK-PATTERN feature is hot:
+# tainted data flowing to an EXTERNAL target, a credential-exfil chain, or an injected
+# imperative. These are the "the agent may be acting against the user" signals.
+#
+# We deliberately do NOT treat `taint-flow == "tainted-sink"` as safety. tainted-sink only
+# means "a token the agent saw earlier reappears in the args of a write/edit/exec" — which
+# is ordinary coding (read a config, then write a derived file; see a path, then edit it).
+# It is not evidence of adversarial intent; only flow to an *external* recipient
+# (tainted-external-target) crosses the trust boundary. Hard-denying every tainted-sink made
+# benign local ops (editing a file you just read, POSTing to 127.0.0.1, reading your own log)
+# unrecoverable in enforce mode. So tainted-sink falls through to "waste" (overridable).
+#
+# We also do NOT key on `action-class` (delete/exec/external-send): that's the action *type*,
+# not the block's *motivation* — a repeated `rm` flagged as a waste loop must stay OVERRIDABLE,
+# not be hard-denied for being destructive. Deterministic feature inspection, no belief
+# arithmetic — so it lives here (server-side), not in the thin adapter (Invariant 1).
 def _block_category(features: dict[str, str]) -> str:
     hot = (
-        features.get("taint-flow", "none") != "none"
+        features.get("taint-flow", "none") == "tainted-external-target"
         or features.get("cred-exfil-chain", "no") == "yes"
         or features.get("injected-imperative", "no") == "yes"
     )
