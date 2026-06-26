@@ -179,6 +179,24 @@ Alongside the `PreToolUse` gate, the plugin registers a **`SessionStart`** hook
 
 The pip path registers both hooks too (`credence-governor-cc-install`).
 
+### Correcting decisions (closing the ask loop)
+
+Claude Code's hook has no resolution callback (OpenClaw learns from its approval
+dialog via `onResolution`; a subprocess hook never hears your answer). So you close
+the loop explicitly — tell the governor when a gated call was actually fine, and the
+belief learns (conditions + replays on boot):
+
+```bash
+credence-governor-feedback approve     # the LAST gated call was fine — stop gating it
+credence-governor-feedback reject      # it was rightly stopped — reinforce that
+credence-governor-feedback approve --event evt_123   # a specific decision
+```
+
+`approve` conditions the belief toward allowing that context; `reject` toward
+refusing it. Works in shadow mode too (the daemon still decides + logs), so you can
+calibrate while observing. Provided by `pip install credence-governor-claude-code`
+(or `python -m credence_governor_claude_code.feedback approve`).
+
 ## Tests
 
 ```bash
