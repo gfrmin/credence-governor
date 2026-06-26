@@ -13,11 +13,23 @@ from credence_governor_core.daemon import Daemon, _block_category
 from credence_governor_core.log import ObservationLog
 
 
-def test_block_category_safety_only_on_attack_pattern_features():
-    assert _block_category({"taint-flow": "tainted-sink"}) == "safety"
+def test_block_category_safety_only_on_external_attack_pattern_features():
+    # Hard-deny (safety, no override) ONLY for signals that cross the trust boundary or show
+    # adversarial intent: tainted data to an EXTERNAL target, a credential-exfil chain, an
+    # injected imperative.
     assert _block_category({"taint-flow": "tainted-external-target"}) == "safety"
     assert _block_category({"cred-exfil-chain": "yes"}) == "safety"
     assert _block_category({"injected-imperative": "yes"}) == "safety"
+
+
+def test_tainted_sink_alone_is_waste_not_safety():
+    # tainted-sink = "a token seen earlier reappears in the args of a write/edit/exec" =
+    # ordinary coding (edit a file you just read, POST to 127.0.0.1, read your own log). It
+    # is NOT adversarial intent and must stay OVERRIDABLE (waste), never a hard deny.
+    # Regression for the dogfood safety-over-fire (benign local ops hard-denied in enforce).
+    assert _block_category({"taint-flow": "tainted-sink"}) == "waste"
+    assert _block_category({"action-class": "cross-boundary", "taint-flow": "tainted-sink"}) == "waste"
+    assert _block_category({"action-class": "external-send", "taint-flow": "tainted-sink"}) == "waste"
 
 
 def test_destructive_action_without_attack_signal_stays_waste():
