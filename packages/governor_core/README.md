@@ -77,9 +77,10 @@ the extractor gains a feature, past traffic cannot be re-derived. Set
 `(tool_name, input, session)` of each governed call to `~/.credence-governor/raw_events.jsonl`
 — a **re-extractable** corpus a later feature-engineering pass folds in as benign
 negatives (`training.capture_corpus.load_capture`). **Off by default** (raw sessions
-carry file contents + commands); string fields are truncated to
-`CREDENCE_GOVERNOR_CAPTURE_MAXLEN` (default 8192). Non-causal: capture never feeds a
-belief or a decision.
+carry file contents + commands). String fields over `CREDENCE_GOVERNOR_CAPTURE_MAXLEN`
+(default 1 MB — a runaway-size guard, not a privacy cap; truncated records are excluded
+from the fold since they would re-extract to different features) are cut. Non-causal:
+capture never feeds a belief or a decision.
 
 ## Tests
 
