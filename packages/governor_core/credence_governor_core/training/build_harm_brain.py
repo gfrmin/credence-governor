@@ -133,6 +133,21 @@ def accumulate(records: list[dict], ctx_keys: list[str] | None = None,
     return counts, {"n_calls": n_calls, "n_harm_labelled": n_harm, "n_trajectories": len(records)}
 
 
+def fold_benign_negatives(counts: dict[tuple[str, ...], list[int]],
+                          calls, ctx_keys: list[str] | None = None) -> int:
+    """Fold is_safe coding calls into existing counts as n0 — the FP/benign-coding
+    corpus is TRAINING data, not just eval (everything is a feature; the posterior
+    learns read-own → benign from these negatives, which ATBench cannot teach because
+    it has no in-workspace reads). ``calls`` is an iterable of (event, session)."""
+    keys = ctx_keys or _CTX_KEYS
+    n = 0
+    for event, session in calls:
+        feats = extract_safety(event, session)
+        counts[tuple(feats[k] for k in keys)][0] += 1
+        n += 1
+    return n
+
+
 def _corpus_sha256(path: str) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:

@@ -51,6 +51,13 @@ class LabeledCall:
 
 
 # ── ATBench-Claw (AI45Research/ATBench) ──────────────────────────────────────
+# The OpenClaw assistant's declared own-footprint: its identity/config files. Reading
+# these is the agent inspecting itself (own-source); every other read may be attacker-
+# plantable (a downloaded doc, a shared note). Mirrors the reference extractor's _POLICY
+# trusted set; feeds the `source-locality` feature (Invariant 2 declared data).
+ATBENCH_TRUSTED_PATHS = [".openclaw", "SOUL.md", "USER.md", "IDENTITI", "IDENTITY"]
+
+
 def load_atbench(path: str) -> list[dict[str, Any]]:
     """Load an ATBench test.json: a list of {trajectory, labels, reason} records."""
     with open(path) as f:
@@ -90,7 +97,7 @@ def iter_atbench_calls(record: dict[str, Any], session_id: str) -> Iterator[Labe
                     session_id=session_id,
                     idx=idx,
                     event=AgentToolEvent(tool_name=name, input=args),
-                    session=Session(messages=list(messages)),
+                    session=Session(messages=list(messages), trusted_paths=ATBENCH_TRUSTED_PATHS),
                     is_safe=is_safe,
                     risk_source=risk_source,
                     reason=reason,
