@@ -164,11 +164,15 @@ class Daemon:
         self.log.append({"event_type": "tool-proposed", "event_id": event_id, "features": features})
         self.log.append({"event_type": "decision", "in_response_to": event_id, "action": action})
         # Capture the raw payload (when enabled) so a future extractor re-derives features
-        # over this real traffic. Best-effort: capture must never break a decision.
+        # over this real traffic. Best-effort and absolutely non-fatal: this runs AFTER the
+        # decision is computed, so ANY capture exception (not just OSError — a deeply nested
+        # payload could RecursionError, a non-serialisable input could TypeError) must be
+        # swallowed here. If it escaped, the outer handler's fail-open would turn the
+        # already-computed block/ask into proceed — a capture hiccup must never do that.
         if self.capture is not None and payload.get("features") is None:
             try:
                 self.capture.append(event_id, payload)
-            except OSError as err:
+            except Exception as err:  # noqa: BLE001 — telemetry must never break a decision
                 self.logline(f"credence-governor: raw capture failed (non-fatal): {err}")
         return {"action": action, "features": features, "event_id": event_id, "category": _block_category(features)}
 

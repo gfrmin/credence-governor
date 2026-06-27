@@ -20,9 +20,19 @@ from collections.abc import Iterator
 from ..schema import AgentToolEvent, Session, event_and_session_from_payload
 
 
-def load_capture(path: str) -> Iterator[tuple[AgentToolEvent, Session]]:
+def load_capture(path: str, *, include_truncated: bool = False) -> Iterator[tuple[AgentToolEvent, Session]]:
     """Yield (event, session) for each captured record, ready for re-extraction.
-    Malformed lines are skipped (a truncated/partial tail must not break a build)."""
+
+    Two correctness filters, both load-bearing for the training fold:
+    - **Truncated records are excluded by default.** A capped string can re-extract to
+      DIFFERENT features than the live decision saw (a taint token past the cut), so a
+      truncated record is not a faithful negative; pass include_truncated=True only for
+      inspection, never for folding.
+    - **Deduplicated on event_id** (first occurrence wins). A retried/replayed /decide
+      appends the same event_id twice; folding both would double-count that cell.
+
+    Malformed lines are skipped (a partial tail or an interleaved write must not break a build)."""
+    seen: set[str] = set()
     with open(path, encoding="utf-8") as f:
         for line in f:
             if not line.strip():
@@ -31,4 +41,11 @@ def load_capture(path: str) -> Iterator[tuple[AgentToolEvent, Session]]:
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if rec.get("truncated") and not include_truncated:
+                continue
+            eid = rec.get("event_id")
+            if isinstance(eid, str):
+                if eid in seen:
+                    continue
+                seen.add(eid)
             yield event_and_session_from_payload(rec)
