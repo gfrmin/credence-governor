@@ -39,9 +39,11 @@ from ..safety import extract_safety, is_sink
 from .corpus import _atbench_events, iter_atbench_calls, load_atbench
 
 _CTX_KEYS = HARM["feature_names"]  # [action-class, taint-flow, injected-imperative, cred-exfil-chain]
-# Extended set for MEASURING a candidate feature (e.g. taint-source, M2) before it is
-# promoted into config.HARM + retrained at ship time. The shipped brain stays 4-feature.
-EXTENDED_CTX_KEYS = ["action-class", "taint-flow", "taint-source", "injected-imperative", "cred-exfil-chain"]
+# Extended set for MEASURING candidate features (taint-source M2, target-externality
+# M3) before they are promoted into config.HARM + retrained at ship time. The shipped
+# brain stays 4-feature until M4.
+EXTENDED_CTX_KEYS = ["action-class", "taint-flow", "taint-source", "target-externality",
+                     "injected-imperative", "cred-exfil-chain"]
 
 # Attribution-only token rules (reason-text localisation). Deliberately NOT the
 # extractor's token set — this is "which call does the human reason point at",

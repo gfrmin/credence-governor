@@ -36,21 +36,40 @@ def test_controls_are_clean():
         assert f.clean, f"control {c.name} over-fired: hard={f.hard} soft={f.soft} feats={f.features}"
 
 
-def test_every_pathology_currently_overfires():
-    # Baseline pin: each dogfood case trips at least one over-firing today. When the
-    # corresponding structural fix lands, change the specific case below to assert
-    # `evaluate_case(c).clean` and delete it from this list.
-    for c in _PATHOLOGIES:
-        f = evaluate_case(c)
-        assert (f.hard or f.soft), f"pathology {c.name} unexpectedly clean — fix landed? update the test"
+# The _block_category FP metric reads only the legacy 4 features — it cannot see the
+# M2/M3 features (taint-source, target-externality), so it shows ONLY the direct
+# action_class fix. The feature-discounted cases still trip _block_category here; their
+# fix is the posterior conditioning on the new features, validated in
+# test_provenance_training, and realised when promoted to config.HARM + retrained (M4).
+_M3_DIRECTLY_FIXED = {"edit-doc-mentioning-delete"}  # structure-based action_class flips it clean
+
+
+def test_action_class_structure_fix_flips_the_content_regex_case():
+    # M3: editing a DOC that merely mentions delete/remove/drop is a local-write, not a
+    # delete — the content is never scanned. This flips clean in the legacy metric.
+    f = evaluate_case(_BY_NAME["edit-doc-mentioning-delete"])
+    assert f.features["action-class"] == "local-write"
+    assert f.clean
+
+
+def test_feature_discounted_pathologies_still_trip_legacy_metric():
+    # The other three carry the discounting M2/M3 feature (taint-source / target-
+    # externality) but still trip _block_category, which cannot see it — they flip clean
+    # only once the posterior is retrained on those features (M4).
+    for name in (set(c.name for c in _PATHOLOGIES) - _M3_DIRECTLY_FIXED):
+        f = evaluate_case(_BY_NAME[name])
+        assert (f.hard or f.soft), f"{name} unexpectedly clean in the legacy metric"
 
 
 def test_specific_dogfood_firings():
-    # The exact mis-extraction each pathology produces, so a fix's effect is legible.
-    assert evaluate_case(_BY_NAME["edit-doc-mentioning-delete"]).features["action-class"] == "delete"
+    # The exact extraction each case produces post-M2/M3, so a fix's effect is legible.
+    assert evaluate_case(_BY_NAME["edit-doc-mentioning-delete"]).features["action-class"] == "local-write"
+    # post-to-localhost is structurally an external-send, but target-externality marks it internal.
     assert evaluate_case(_BY_NAME["post-to-localhost"]).features["action-class"] == "external-send"
-    assert evaluate_case(_BY_NAME["edit-security-code-after-read"]).features["injected-imperative"] == "yes"
-    assert evaluate_case(_BY_NAME["edit-file-after-reading-it"]).features["taint-flow"] == "tainted-sink"
+    assert evaluate_case(_BY_NAME["post-to-localhost"]).features["target-externality"] == "internal"
+    # editing your own files: provenance is read-own (the M2 discount), not external.
+    assert evaluate_case(_BY_NAME["edit-security-code-after-read"]).features["taint-source"] == "read-own"
+    assert evaluate_case(_BY_NAME["edit-file-after-reading-it"]).features["taint-source"] == "read-own"
 
 
 def test_only_attack_features_drive_hard_deny():

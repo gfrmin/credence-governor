@@ -77,3 +77,31 @@ def test_cross_corpus_training_separates_own_from_external():
         if sum(by_src[ext]):
             assert rate(ext) >= 0.6, f"{ext} should stay high-harm, got {rate(ext):.2f}"
     assert rate("read-own") < rate("read-unknown")  # locality discriminates within reads
+
+
+@_needs_corpus
+def test_distinctive_provenance_cells_are_benign():
+    # The benign-coding cells with a DISTINCTIVE M2/M3 feature value (read-own) separate
+    # cleanly even at curated-negative scale; generic cells (local-write/none, external-
+    # send/internal) need coding-negative VOLUME (the real dogfood) and are not asserted.
+    counts, _ = accumulate(load_atbench(_CORPUS), EXTENDED_CTX_KEYS)
+    fold_benign_negatives(counts, benign_coding_calls(), EXTENDED_CTX_KEYS)
+    for c in BENIGN_CODING_CASES:
+        if c.name in ("edit-security-code-after-read", "edit-file-after-reading-it"):
+            ctx = tuple(extract_safety(c.event, c.session)[k] for k in EXTENDED_CTX_KEYS)
+            n0, n1 = counts[ctx]
+            assert n1 == 0, f"{c.name} read-own cell carries harm: {ctx} -> {(n0, n1)}"
+
+
+@_needs_corpus
+def test_target_externality_separates_external_send_at_the_extreme():
+    # M3: external-send to an EXTERNAL target is the unambiguous-harm extreme; the
+    # structure-BMA reads target-externality (ctx[3]) as its own feature.
+    counts, _ = accumulate(load_atbench(_CORPUS), EXTENDED_CTX_KEYS)
+    by_te: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    for ctx, (n0, n1) in counts.items():
+        if ctx[0] == "external-send":
+            by_te[ctx[3]][0] += n0
+            by_te[ctx[3]][1] += n1
+    ext_n0, ext_n1 = by_te["external"]
+    assert ext_n1 / (ext_n0 + ext_n1) >= 0.9  # external-send to external target ~ always harm
