@@ -16,7 +16,9 @@ MessageRole = Literal["user", "assistant", "tool_call", "tool_result"]
 @dataclass
 class Message:
     role: MessageRole
-    # The tool's name (on tool_call messages).
+    # On tool_call messages: the call's tool name. On tool_result messages: the
+    # name of the tool that PRODUCED this result — the content's source/provenance
+    # (e.g. web_fetch vs read), used to decide whether the result is untrusted input.
     tool_name: str | None = None
     # The tool call's arguments (on tool_call messages) — used to count repeats
     # of the SAME call (the argument-level loop signal). Absent on non-tool messages.
