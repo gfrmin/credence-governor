@@ -24,6 +24,7 @@ from importlib import resources
 from typing import Any, Callable
 
 from .features import extract_features
+from .capture import RawCaptureLog
 from .log import ObservationLog
 from .safety import extract_safety
 from .schema import event_and_session_from_payload
@@ -106,11 +107,15 @@ class Daemon:
         log: ObservationLog,
         engine_lock: threading.Lock,
         logline: Callable[[str], None] = lambda m: None,
+        capture: RawCaptureLog | None = None,
     ):
         self.session = session
         self.log = log
         self.lock = engine_lock
         self.logline = logline
+        # Opt-in raw-event capture (None when disabled). Non-causal — a re-extractable
+        # training corpus, never read back into a belief.
+        self.capture = capture
         # Set once the engine has booted. The server binds + serves BEFORE boot (so a
         # duplicate daemon fails fast on EADDRINUSE instead of booting a second engine);
         # until this flips, /ready, /decide and /sensor answer a fast 503 (fail-open),
@@ -158,6 +163,13 @@ class Daemon:
             action = self.session.decide(features, features, payload.get("profile"))
         self.log.append({"event_type": "tool-proposed", "event_id": event_id, "features": features})
         self.log.append({"event_type": "decision", "in_response_to": event_id, "action": action})
+        # Capture the raw payload (when enabled) so a future extractor re-derives features
+        # over this real traffic. Best-effort: capture must never break a decision.
+        if self.capture is not None and payload.get("features") is None:
+            try:
+                self.capture.append(event_id, payload)
+            except OSError as err:
+                self.logline(f"credence-governor: raw capture failed (non-fatal): {err}")
         return {"action": action, "features": features, "event_id": event_id, "category": _block_category(features)}
 
     # ── explicit human feedback (Claude Code has no onResolution; close the loop here) ──

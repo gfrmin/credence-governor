@@ -14,6 +14,7 @@ import subprocess
 import threading
 from typing import Callable
 
+from .capture import RawCaptureLog
 from .daemon import Daemon, data_dir
 from .features import extract_features, extractors
 from .log import ObservationLog
@@ -179,10 +180,13 @@ def run() -> None:
 
     _stdout("credence-governor: starting — resolving engine…")
     log = ObservationLog(log_path)
+    capture = RawCaptureLog.from_env(os.path.join(os.path.expanduser("~"), ".credence-governor"))
+    if capture is not None:
+        _stdout(f"credence-governor: raw-event capture ON → {capture.path} (re-extractable training corpus)")
     skin = build_skin_client()  # prints engine provenance + any pull progress
     engine_lock = threading.Lock()
     session = BrainSession(skin, brain_dir, log)
-    daemon = Daemon(session, log, engine_lock, logline=lambda m: print(m, flush=True))
+    daemon = Daemon(session, log, engine_lock, logline=lambda m: print(m, flush=True), capture=capture)
 
     # Bind + serve BEFORE the ~18s engine boot. A duplicate daemon (e.g. a second
     # autostart) then fails fast here on EADDRINUSE instead of booting a whole second

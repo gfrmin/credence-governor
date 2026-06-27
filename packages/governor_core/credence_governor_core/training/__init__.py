@@ -14,6 +14,7 @@ from .cand_eval import (
     score_candidate,
     score_pooled,
 )
+from .capture_corpus import load_capture
 from .corpus import LabeledCall, iter_atbench, load_atbench
 from .fp_eval import (
     BENIGN_CODING_CASES,
@@ -25,7 +26,7 @@ from .fp_eval import (
 )
 
 __all__ = [
-    "LabeledCall", "iter_atbench", "load_atbench",
+    "LabeledCall", "iter_atbench", "load_atbench", "load_capture",
     "BENIGN_CODING_CASES", "benign_coding_calls", "evaluate_case", "fp_firings",
     "run_curated", "snapshot_live_log",
     "accumulate", "build", "localize_harm", "verify", "fold_benign_negatives",
