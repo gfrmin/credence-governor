@@ -17,11 +17,15 @@ OFF by default (raw sessions carry file contents + commands — a privacy postur
 published package must not assume). Enable with CREDENCE_GOVERNOR_CAPTURE=1 (or a path).
 
 Truncation vs re-extraction: string fields over CREDENCE_GOVERNOR_CAPTURE_MAXLEN
-(default 8192) are cut so one giant tool-result cannot bloat a record — but truncation
-is destructive: a taint token past the cut would re-extract to DIFFERENT features than
-the live decision saw, silently mis-celling the record. So every record records
-whether it was truncated, and load_capture excludes truncated records from the
-training fold by default — only faithfully re-extractable records become negatives.
+(default 1 MB) are cut so a pathological multi-MB blob cannot run a record away — but
+truncation is destructive: a taint token past the cut would re-extract to DIFFERENT
+features than the live decision saw, silently mis-celling the record, and truncated
+records are excluded from the training fold. The cap is a runaway-size guard, not a
+privacy control (opt-in already accepts raw capture), so the default is generous: real
+coding traffic (file contents, transcript context) routinely exceeds tens of KB and
+must NOT be truncated, or the corpus the capture exists to build is starved. Every
+record records whether it was truncated; load_capture excludes truncated records by
+default — only faithfully re-extractable records become negatives.
 """
 
 from __future__ import annotations
@@ -31,7 +35,8 @@ import os
 import threading
 from typing import Any
 
-DEFAULT_MAXLEN = 8192
+DEFAULT_MAXLEN = 1_000_000  # 1 MB/string: a runaway guard, not a privacy cap — real
+#                             coding traffic must pass untruncated or the corpus starves
 _MAX_DEPTH = 40  # bound recursion: a deeply-nested payload must not RecursionError into the decision path
 _TRUNC_MARK = "…[truncated]"
 
