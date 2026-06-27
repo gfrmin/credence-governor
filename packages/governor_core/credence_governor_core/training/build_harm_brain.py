@@ -8,9 +8,10 @@ daemon's own ``extract_safety`` (train == runtime), killing the fork.
 Procedure (pure data aggregation — no engine needed):
 
     corpus trajectory
-      └─ for each proposed call:  extract_safety(event, session_so_far)  → 4-tuple context
+      └─ for each proposed call:  extract_safety(event, session_so_far)  → 6-tuple context
       └─ reason-localized attribution: which call the human `reason` names as harmful
     accumulate per context:  n1 += harm-localized call (unsafe traj) ; n0 += everything else
+    fold the curated benign-coding negatives as n0 (the FP corpus is training data)
     write {header + contexts:[{ctx,n0,n1}]}  — the warm prior the daemon replays via structure_bma
 
 The attribution (``localize_harm``) is a SEPARATE concern from feature extraction
@@ -37,13 +38,12 @@ from collections import defaultdict
 from ..config import HARM
 from ..safety import extract_safety, is_sink
 from .corpus import _atbench_events, iter_atbench_calls, load_atbench
+from .fp_eval import benign_coding_calls
 
-_CTX_KEYS = HARM["feature_names"]  # [action-class, taint-flow, injected-imperative, cred-exfil-chain]
-# Extended set for MEASURING candidate features (taint-source M2, target-externality
-# M3) before they are promoted into config.HARM + retrained at ship time. The shipped
-# brain stays 4-feature until M4.
-EXTENDED_CTX_KEYS = ["action-class", "taint-flow", "taint-source", "target-externality",
-                     "injected-imperative", "cred-exfil-chain"]
+# The shipped 6-tuple (M4 promoted taint-source + target-externality from candidate-
+# measurement into config.HARM). Single source of truth: the order tracks config.HARM
+# and the extractor is train==runtime, so build() reproduces the deployed posterior.
+_CTX_KEYS = HARM["feature_names"]
 
 # Attribution-only token rules (reason-text localisation). Deliberately NOT the
 # extractor's token set — this is "which call does the human reason point at",
@@ -114,8 +114,8 @@ def accumulate(records: list[dict], ctx_keys: list[str] | None = None,
                ) -> tuple[dict[tuple[str, ...], list[int]], dict[str, int]]:
     """Per-context [n0, n1] over every call, using the shared extractor for the
     context and reason-localisation for the n1 (harm) label. ``ctx_keys`` selects the
-    feature tuple (defaults to the shipped 4; pass EXTENDED_CTX_KEYS to measure a
-    candidate feature like taint-source)."""
+    feature tuple (defaults to the shipped set, config.HARM; override only to measure a
+    sub-/super-set against the same corpus)."""
     keys = ctx_keys or _CTX_KEYS
     counts: dict[tuple[str, ...], list[int]] = defaultdict(lambda: [0, 0])
     n_calls = n_harm = 0
@@ -158,12 +158,19 @@ def _corpus_sha256(path: str) -> str:
     return h.hexdigest()
 
 
-def build(corpus_path: str, corpus_label: str) -> dict:
+def build(corpus_path: str, corpus_label: str, *, fold_benign: bool = True) -> dict:
     """The full counts artifact (header + sorted contexts). Deterministic: contexts
     are sorted by tuple and no wall-clock stamp is embedded, so the same corpus +
-    extractor reproduce byte-for-byte; provenance is the corpus SHA-256."""
+    extractor reproduce byte-for-byte; provenance is the corpus SHA-256.
+
+    ``fold_benign`` adds the curated benign-coding negatives as n0 (the FP corpus IS
+    training data — it teaches read-own → benign, which the attack corpus cannot, having
+    no in-workspace reads). Generic cells (local-write/none, external-send/internal) still
+    need real-dogfood VOLUME to separate; the curated negatives only move the
+    provenance-distinctive (read-own) cells. See M4 notes in the arc plan."""
     records = load_atbench(corpus_path)
     counts, stats = accumulate(records)
+    n_benign = fold_benign_negatives(counts, benign_coding_calls()) if fold_benign else 0
     contexts = [
         {"ctx": list(ctx), "n0": n0, "n1": n1}
         for ctx, (n0, n1) in sorted(counts.items())
@@ -171,9 +178,12 @@ def build(corpus_path: str, corpus_label: str) -> dict:
     return {
         "attribution": "reason-localized (the harmful call the human reason names)",
         "extractor": "credence_governor_core.safety.extract_safety (shared, causal, train==runtime)",
+        "feature_names": list(_CTX_KEYS),
         "corpus": corpus_label,
         "corpus_sha256": _corpus_sha256(corpus_path),
-        "n_calls": stats["n_calls"],
+        "n_calls": stats["n_calls"] + n_benign,
+        "n_attack_calls": stats["n_calls"],
+        "n_benign_negatives": n_benign,
         "n_harm_labelled": stats["n_harm_labelled"],
         "n_trajectories": stats["n_trajectories"],
         "n_contexts": len(contexts),

@@ -1,5 +1,4 @@
 from .build_harm_brain import (
-    EXTENDED_CTX_KEYS,
     accumulate,
     build,
     fold_benign_negatives,
@@ -29,7 +28,7 @@ __all__ = [
     "LabeledCall", "iter_atbench", "load_atbench",
     "BENIGN_CODING_CASES", "benign_coding_calls", "evaluate_case", "fp_firings",
     "run_curated", "snapshot_live_log",
-    "accumulate", "build", "localize_harm", "verify", "EXTENDED_CTX_KEYS", "fold_benign_negatives",
+    "accumulate", "build", "localize_harm", "verify", "fold_benign_negatives",
     "BUILTIN_CANDIDATES", "CorpusSource", "atbench_source", "benign_coding_source",
     "from_safety_feature", "score_candidate", "score_pooled",
 ]

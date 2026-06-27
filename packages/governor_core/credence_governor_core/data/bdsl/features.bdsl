@@ -60,6 +60,24 @@
 (define taint-flow-space
   (space :finite none tainted-sink tainted-external-target))
 
+; Provenance of the most-external value reaching the sink (M2). NOT a gate — a
+; feature the posterior conditions on: an in-workspace read (read-own) is benign
+; provenance the brain learns to discount, while web/email/marker stay high-harm.
+; Most-external first (safety.py:_SOURCE_EXTERNALITY); `none` when nothing taints.
+(define taint-source-space
+  (space :finite
+    web browser email message command-network marker
+    read-external command-external local-external
+    read-unknown command-unknown local-unknown
+    read-own command-own local-own
+    none))
+
+; Where the action's destination sits (M3): a curl to 127.0.0.1 is structurally an
+; external-send but its target is `internal`, so the posterior learns external-send
+; x internal is benign while external-send x external stays the unambiguous-harm extreme.
+(define target-externality-space
+  (space :finite external internal none))
+
 ; Does this action execute an imperative verb issued by untrusted content?
 (define injected-imperative-space
   (space :finite no yes))
@@ -72,5 +90,7 @@
   (list
     (feature action-class        action-class-space)
     (feature taint-flow          taint-flow-space)
+    (feature taint-source        taint-source-space)
+    (feature target-externality  target-externality-space)
     (feature injected-imperative injected-imperative-space)
     (feature cred-exfil-chain    cred-exfil-chain-space)))
