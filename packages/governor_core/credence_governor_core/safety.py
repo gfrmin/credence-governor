@@ -120,16 +120,62 @@ _NETWORK_CMD_RE = re.compile(r"(?:^|[|&;`]\s*|\s)(curl|wget|nc|netcat|ftp|scp|sf
 
 # Externality ordering: when a sink is reached by tokens from several sources, the
 # MOST-external source class wins (it is the one an attacker most plausibly controls).
-_SOURCE_EXTERNALITY = ["web", "browser", "email", "message", "command-network",
-                       "marker", "local-read", "command-local", "local"]
+# External channels first, then external/unknown-locality local reads, then own reads.
+_SOURCE_EXTERNALITY = [
+    "web", "browser", "email", "message", "command-network", "marker",
+    "read-external", "command-external", "local-external",
+    "read-unknown", "command-unknown", "local-unknown",
+    "read-own", "command-own", "local-own",
+]
+
+
+# Where a producing tool_call's target sits relative to the agent's declared
+# own-footprint. A FEATURE value, learned by the posterior — never a gate.
+_PATH_ARG_KEYS = ("file_path", "filepath", "path", "filename", "file", "target",
+                  "notebook_path", "note", "dir", "directory")
+_PATH_IN_CMD = re.compile(r"(?<![\w@])(~?/[\w.+\-/]+|\.{1,2}/[\w.+\-/]+|[\w.+\-]+/[\w.+\-/]+|[\w.+\-]+\.\w{1,5})")
+
+
+def producing_target(args: Any) -> str | None:
+    """The path/target a producing tool_call read, from its args (a declared key, or
+    the first path-like token in a shell command)."""
+    if isinstance(args, dict):
+        for k in _PATH_ARG_KEYS:
+            v = args.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        cmd = args.get("command") or args.get("cmd")
+        if isinstance(cmd, str):
+            m = _PATH_IN_CMD.search(cmd)
+            return m.group(0) if m else None
+    elif isinstance(args, str):
+        m = _PATH_IN_CMD.search(args)
+        return m.group(0) if m else None
+    return None
+
+
+def target_locality(path: str | None, trusted_paths: list[str], project_root: str = "") -> str:
+    """own | external | unknown — is ``path`` within the agent's declared own-footprint?
+    Explicit trusted patterns (the agent's identity/config/state) match anywhere in the
+    path; an absolute path is own iff under project_root; a relative path is own only
+    when a project_root is declared (it resolves to the agent's own working dir)."""
+    if not path:
+        return "unknown"
+    for pat in trusted_paths:
+        if pat and pat in path:
+            return "own"
+    if path.startswith("/"):
+        return "own" if project_root and path.startswith(project_root) else "external"
+    return "own" if project_root else "external"
 
 
 def source_class(result_tool_name: str | None, producing_command: str | None = None,
-                 marked: bool = False) -> str:
+                 marked: bool = False, locality: str = "unknown") -> str:
     """The provenance class of a tool_result's content. Not a trust verdict — a
     feature value the harm posterior conditions on. ``producing_command`` is the
     flattened args of the producing tool_call (disambiguates bash curl vs cat);
-    ``marked`` flags injection-marker content (poisoned even from a local source)."""
+    ``marked`` flags injection-marker content; ``locality`` places a local read's
+    target in the agent's own-footprint (own/external/unknown)."""
     n = (result_tool_name or "").lower()
     for cls, rx in _SOURCE_CLASS_RES:
         if rx.search(n):
@@ -137,12 +183,12 @@ def source_class(result_tool_name: str | None, producing_command: str | None = N
     if _COMMAND_TOOL_RE.search(n):
         if producing_command and _NETWORK_CMD_RE.search(producing_command):
             return "command-network"
-        return "marker" if marked else "command-local"
+        return "marker" if marked else f"command-{locality}"
     if marked:
         return "marker"
     if is_read_only(n):
-        return "local-read"
-    return "local"
+        return f"read-{locality}"
+    return f"local-{locality}"
 
 
 def _most_external(classes: set[str]) -> str:
@@ -289,8 +335,13 @@ def extract_safety(event: AgentToolEvent, session: Session) -> FeatureDict:
         if m.role == "tool_result":
             text = _result_to_text(m.result)
             if text:
-                producing = _flatten(prev_call_input) if _same_tool(prev_call_tool, m.tool_name) else None
-                cls = source_class(m.tool_name, producing, marked=looks_untrusted(text))
+                if _same_tool(prev_call_tool, m.tool_name):
+                    producing = _flatten(prev_call_input)
+                    loc = target_locality(producing_target(prev_call_input),
+                                          session.trusted_paths, session.project_root)
+                else:
+                    producing, loc = None, "unknown"
+                cls = source_class(m.tool_name, producing, marked=looks_untrusted(text), locality=loc)
                 _tag(token_source, extract_tokens(text), cls)
                 _tag(verb_source, untrusted_imperatives(text), cls)
         elif m.role == "tool_call":

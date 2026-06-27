@@ -1,4 +1,11 @@
-from .build_harm_brain import accumulate, build, localize_harm, verify
+from .build_harm_brain import (
+    EXTENDED_CTX_KEYS,
+    accumulate,
+    build,
+    fold_benign_negatives,
+    localize_harm,
+    verify,
+)
 from .cand_eval import (
     BUILTIN_CANDIDATES,
     CorpusSource,
@@ -9,12 +16,20 @@ from .cand_eval import (
     score_pooled,
 )
 from .corpus import LabeledCall, iter_atbench, load_atbench
-from .fp_eval import BENIGN_CODING_CASES, evaluate_case, fp_firings, run_curated, snapshot_live_log
+from .fp_eval import (
+    BENIGN_CODING_CASES,
+    benign_coding_calls,
+    evaluate_case,
+    fp_firings,
+    run_curated,
+    snapshot_live_log,
+)
 
 __all__ = [
     "LabeledCall", "iter_atbench", "load_atbench",
-    "BENIGN_CODING_CASES", "evaluate_case", "fp_firings", "run_curated", "snapshot_live_log",
-    "accumulate", "build", "localize_harm", "verify",
+    "BENIGN_CODING_CASES", "benign_coding_calls", "evaluate_case", "fp_firings",
+    "run_curated", "snapshot_live_log",
+    "accumulate", "build", "localize_harm", "verify", "EXTENDED_CTX_KEYS", "fold_benign_negatives",
     "BUILTIN_CANDIDATES", "CorpusSource", "atbench_source", "benign_coding_source",
     "from_safety_feature", "score_candidate", "score_pooled",
 ]

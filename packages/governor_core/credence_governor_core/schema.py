@@ -45,6 +45,13 @@ class Session:
     # Absolute path to the project root, used to classify cwd against the
     # project boundary. "" means "unknown".
     project_root: str = ""
+    # The agent's DECLARED own-footprint: path prefixes/patterns whose content the
+    # agent authored or controls (its identity/config files, its workspace, its state
+    # dirs). A read of one of these is its own-source; anything else may be attacker-
+    # plantable. Deployment data (Invariant 2); feeds the `source-locality` feature,
+    # which the harm posterior weights — it is NOT a trust gate. e.g. coding agent:
+    # [project_root, "~/.credence-governor"]; assistant: [".openclaw", "SOUL.md", ...].
+    trusted_paths: list[str] = field(default_factory=list)
     messages: list[Message] = field(default_factory=list)
 
 
@@ -82,6 +89,7 @@ def event_and_session_from_payload(
     session = Session(
         cwd=sess.get("cwd") or sess.get("cwd_path") or "",
         project_root=sess.get("project_root") or sess.get("projectRoot") or "",
+        trusted_paths=list(sess.get("trusted_paths") or sess.get("trustedPaths") or []),
         messages=[_message_from_dict(m) for m in (sess.get("messages") or [])],
     )
     return event, session
