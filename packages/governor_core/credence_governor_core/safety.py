@@ -97,6 +97,67 @@ def looks_untrusted(text: str) -> bool:
     return bool(_UNTRUSTED_MARKERS.search(text or ""))
 
 
+# ── provenance: the SOURCE-CLASS of consumed content (M2) ────────────────────
+# We do NOT decide trusted/untrusted in the extractor and drop "trusted" taint —
+# that collapses provenance to a hand-tuned threshold and craters recall. Instead
+# every tool_result still seeds taint, but each token/verb is LABELLED with the
+# class of the source that produced it. The class becomes the `taint-source`
+# FEATURE; `condition` learns which (action × taint × source) combinations are
+# harmful (web→external-send = harm; local-project-read→edit = benign). Fine-
+# grained on purpose — the structure-BMA auto-sophisticates over the classes;
+# coarse trusted/untrusted bucketing would be the irreversible mistake.
+#
+# Ordered most-external first; first match wins.
+_SOURCE_CLASS_RES: list[tuple[str, re.Pattern[str]]] = [
+    ("web", re.compile(r"web[_-]?fetch|web[_-]?search|fetch[_-]?url|url[_-]?fetch|search\b", re.I)),
+    ("browser", re.compile(r"browser|browse|activate_window|screenshot|type_text", re.I)),
+    ("email", re.compile(r"gmail|\be?mail\b|imap|himalaya|envelope", re.I)),
+    ("message", re.compile(r"\bsms\b|slack|telegram|discord|message|inbox|\bdm\b|pin\b", re.I)),
+]
+# Command-style tools carry their real action in the args, not the name.
+_COMMAND_TOOL_RE = re.compile(r"\b(bash|sh|zsh|shell|exec|process|tmux|run|command|cmd)\b", re.I)
+_NETWORK_CMD_RE = re.compile(r"(?:^|[|&;`]\s*|\s)(curl|wget|nc|netcat|ftp|scp|sftp|ssh|telnet|http|https)\b", re.I)
+
+# Externality ordering: when a sink is reached by tokens from several sources, the
+# MOST-external source class wins (it is the one an attacker most plausibly controls).
+_SOURCE_EXTERNALITY = ["web", "browser", "email", "message", "command-network",
+                       "marker", "local-read", "command-local", "local"]
+
+
+def source_class(result_tool_name: str | None, producing_command: str | None = None,
+                 marked: bool = False) -> str:
+    """The provenance class of a tool_result's content. Not a trust verdict — a
+    feature value the harm posterior conditions on. ``producing_command`` is the
+    flattened args of the producing tool_call (disambiguates bash curl vs cat);
+    ``marked`` flags injection-marker content (poisoned even from a local source)."""
+    n = (result_tool_name or "").lower()
+    for cls, rx in _SOURCE_CLASS_RES:
+        if rx.search(n):
+            return cls
+    if _COMMAND_TOOL_RE.search(n):
+        if producing_command and _NETWORK_CMD_RE.search(producing_command):
+            return "command-network"
+        return "marker" if marked else "command-local"
+    if marked:
+        return "marker"
+    if is_read_only(n):
+        return "local-read"
+    return "local"
+
+
+def _most_external(classes: set[str]) -> str:
+    for cls in _SOURCE_EXTERNALITY:
+        if cls in classes:
+            return cls
+    return "none"
+
+
+def _same_tool(call_tool: str | None, result_tool: str | None) -> bool:
+    """Does a prior tool_call's tool match the tool that produced a tool_result?
+    Used to attribute a result's producing command to the call before it."""
+    return bool(call_tool) and bool(result_tool) and call_tool.strip().lower() == result_tool.strip().lower()
+
+
 # ── taint-flow primitives ───────────────────────────────────────────────
 _SINK_RE = re.compile(
     r"send|forward|post|publish|tweet|webhook|curl|wget|upload|message|write|edit|create|"
@@ -209,17 +270,29 @@ def extract_safety(event: AgentToolEvent, session: Session) -> FeatureDict:
     replaying the session's tool_result/tool_call history (causal: only content
     seen BEFORE the call taints it). Mirrors the live SafetyTracker's per-call order.
     """
-    tokens: set[str] = set()
-    verbs: set[str] = set()
+    # token/verb -> the MOST-external source class that introduced it. Every result
+    # still seeds (recall preserved); provenance is carried as a label, not a gate.
+    token_source: dict[str, str] = {}
+    verb_source: dict[str, str] = {}
     cred_seen = False
     cred_exfil_chain = False
+    prev_call_tool: str | None = None
+    prev_call_input: Any = None
+
+    def _tag(store: dict[str, str], items: set[str], cls: str) -> None:
+        for it in items:
+            cur = store.get(it)
+            if cur is None or _SOURCE_EXTERNALITY.index(cls) < _SOURCE_EXTERNALITY.index(cur):
+                store[it] = cls
 
     for m in session.messages:
         if m.role == "tool_result":
             text = _result_to_text(m.result)
             if text:
-                tokens |= extract_tokens(text)
-                verbs |= untrusted_imperatives(text)
+                producing = _flatten(prev_call_input) if _same_tool(prev_call_tool, m.tool_name) else None
+                cls = source_class(m.tool_name, producing, marked=looks_untrusted(text))
+                _tag(token_source, extract_tokens(text), cls)
+                _tag(verb_source, untrusted_imperatives(text), cls)
         elif m.role == "tool_call":
             # Complete the credential->external-send chain BEFORE recording credSeen
             # for this historical call (the external-send must come strictly after).
@@ -227,14 +300,47 @@ def extract_safety(event: AgentToolEvent, session: Session) -> FeatureDict:
                 cred_exfil_chain = True
             if is_credential_access(m.tool_name or "", m.input):
                 cred_seen = True
+            prev_call_tool = m.tool_name
+            prev_call_input = m.input
 
     # The proposed call (not in messages): complete the chain if it is the external-send.
     if cred_seen and is_external_send(event.tool_name):
         cred_exfil_chain = True
 
+    tokens = set(token_source)
+    flow = taint_flow(event.tool_name, event.input, tokens)
+    verbs = set(verb_source)
+    imperative = matches_imperative(event.tool_name, event.input, verbs)
     return {
         "action-class": action_class(event.tool_name, event.input),
-        "taint-flow": taint_flow(event.tool_name, event.input, tokens),
-        "injected-imperative": "yes" if matches_imperative(event.tool_name, event.input, verbs) else "no",
+        "taint-flow": flow,
+        "taint-source": _taint_source(event, flow, token_source, verbs, verb_source, imperative),
+        "injected-imperative": "yes" if imperative else "no",
         "cred-exfil-chain": "yes" if cred_exfil_chain else "no",
     }
+
+
+def _taint_source(event: AgentToolEvent, flow: str, token_source: dict[str, str],
+                  verbs: set[str], verb_source: dict[str, str], imperative: bool) -> str:
+    """The provenance class of the untrusted content that REACHED this call — via a
+    matched taint token (taint-flow) or a matched injected imperative. 'none' when the
+    call carries no untrusted influence. The harm posterior conditions on this so it
+    can discount benign-provenance taint (local-project read → edit) without losing
+    external-provenance recall (web → external-send)."""
+    matched: set[str] = set()
+    if flow != "none":
+        at = _flatten(event.input)
+        if is_external_send(event.tool_name):
+            for tok in extract_tokens(at):
+                if tok in token_source:
+                    matched.add(token_source[tok])
+        if is_sink(event.tool_name):
+            for tok, cls in token_source.items():
+                if tok in at:
+                    matched.add(cls)
+    if imperative:
+        blob = (event.tool_name or "").lower() + " " + _flatten(event.input)
+        for v in verbs:
+            if re.search(r"\b" + v + r"\b", blob):
+                matched.add(verb_source.get(v, "local"))
+    return _most_external(matched)
