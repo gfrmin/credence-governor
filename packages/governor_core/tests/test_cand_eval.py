@@ -62,13 +62,13 @@ def test_candidate_exception_is_a_counted_non_fire():
 
 def test_benign_coding_fires_are_pure_false_positives():
     src = benign_coding_source()
-    # external-send fires on the localhost-curl + security-edit pathologies; on an
-    # all-benign corpus every fire is an FP, so harm-precision is 0 / undefined.
+    # external-send fires on the localhost-curl pathology (post-M3, the security-edit is
+    # a local-write, not external-send); on an all-benign corpus every fire is an FP.
     m = score_candidate(BUILTIN_CANDIDATES["action=external-send"], src)
     assert m.n_harm == 0
-    assert m.n_fire >= 2
+    assert m.n_fire >= 1
     assert m.fire_rate > 0
-    assert m.examples_fp  # the offending coding calls are surfaced
+    assert m.examples_fp  # the offending coding call is surfaced
     assert math.isnan(m.harm_recall)  # no harm to recall in an all-benign corpus
 
 

@@ -25,40 +25,88 @@ def _flatten(args: Any) -> str:
         return ""
 
 
-# Ordered most-dangerous-first; first match wins. (class, name-pattern, args-pattern or None)
-_ACTION_RULES: list[tuple[str, re.Pattern[str], re.Pattern[str] | None]] = [
-    ("delete", re.compile(r"\b(rm|unlink|rmdir|delete|remove|trash|drop)\b", re.I), None),
-    ("delete", re.compile(r"\b(exec|process|bash|sh|tmux|run)\b", re.I),
-     re.compile(r"\b(rm\s|unlink|rmdir|drop\s+table|delete\s+from)\b", re.I)),
-    ("external-send", re.compile(r"send|forward|publish|tweet|post\b|webhook|gmail|email|sendmessage|pinmessage|sms|slack", re.I), None),
-    ("external-send", re.compile(r"\b(exec|process|bash|sh|tmux|curl|wget)\b", re.I),
-     re.compile(r"(curl|wget).*(-d|--data|-t\b|-f\b|@/|http)", re.I)),
-    ("credential-access", re.compile(r"op_signin|1password|keychain|secret|credential|vault", re.I), None),
-    ("credential-access", re.compile(r"read|search|cat|grep|get", re.I),
-     re.compile(r"api[_-]?key|secret|credential|token|password|\.env|private[_-]?key", re.I)),
-    ("cross-boundary", re.compile(r"web_fetch|web_search|browser|agent-browser|activate_window|screenshot|type_text|open\b", re.I), None),
-    ("cross-boundary", re.compile(r"move|copy|mv|cp", re.I), re.compile(r"public/|/sync/|external|http", re.I)),
-    ("exec", re.compile(r"\b(exec|process|bash|sh|tmux|run|gh\s+api|api\s+gateway|cron)\b", re.I), None),
-    ("local-write", re.compile(r"\b(write|edit|create|apply_patch|update|move|mv|cp|copy|append|insert)\b", re.I), None),
-    ("read-only", re.compile(r"\b(read|cat|head|tail|ls|grep|find|search|get|list|print|fetch|capture|transcript|view|show|envelope)\b", re.I), None),
+# action_class is computed from the action's STRUCTURE (the tool, and for command
+# tools the command HEAD), never by scanning the payload CONTENT for action verbs.
+# The old rules substring-matched the flattened args, so editing a DOC that merely
+# *mentions* "delete" was classed `delete`, and a path ".../post.ts" was `external-
+# send` — the content-regex disease (M3 fix). Where the data the action carries
+# matters to harm (e.g. a curl's target externality), that is its OWN feature the
+# posterior weights (target-externality), not a thing folded into action_class.
+_TOOL_CLASS_RES: list[tuple[str, re.Pattern[str]]] = [  # by tool NAME, most-specific first
+    ("credential-access", re.compile(r"op[_ ]?signin|1password|keychain|vault", re.I)),
+    ("external-send", re.compile(r"\b(send|forward|publish|tweet|post|webhook|gmail|email|sendmessage|pinmessage|sms|slack|upload)\b", re.I)),
+    ("cross-boundary", re.compile(r"web[_-]?fetch|web[_-]?search|browser|agent-browser|activate_window|screenshot|type_text", re.I)),
+    ("delete", re.compile(r"\b(rm|unlink|rmdir|delete|remove|trash|drop)\b", re.I)),
+    ("local-write", re.compile(r"\b(write|edit|create|apply_patch|patch|update|append|insert|move|mv|copy|cp|notebook_edit)\b", re.I)),
+    ("read-only", re.compile(r"\b(read|cat|head|tail|ls|grep|find|search|get|list|print|fetch|capture|transcript|view|show|envelope)\b", re.I)),
 ]
+# A credential STORE as the target (the file/keychain being touched), not the word
+# "secret" appearing in content — so `grep API_KEY src/` is not credential-access.
+_CRED_FILE_RE = re.compile(
+    r"\.env\b|private[_-]?key|id_rsa|\.pem\b|credentials?\.json|\.aws/|\.ssh/|keychain|"
+    r"op[_ ]signin|1password|\.netrc", re.I)
+
+# Command-head classification (the first real executable in a shell command).
+_CMD_DELETE = {"rm", "unlink", "rmdir", "shred", "trash", "trash-put"}
+_CMD_NETWORK = {"curl", "wget", "nc", "netcat", "scp", "sftp", "ftp", "rsync", "telnet"}
+_CMD_WRITE = {"cp", "mv", "tee", "touch", "mkdir", "ln", "install", "rsync"}
+_CMD_READ = {"cat", "head", "tail", "ls", "grep", "rg", "egrep", "find", "less", "more",
+             "stat", "file", "tree", "wc", "diff", "pwd", "which", "whoami", "echo", "printf"}
+_CMD_WRAPPERS = {"sudo", "env", "nice", "time", "nohup", "xargs", "timeout", "stdbuf",
+                 "command", "exec", "builtin", "then", "do", "&&", "||"}
+
+
+def _command_string(args: Any) -> str:
+    if isinstance(args, dict):
+        for k in ("command", "cmd", "script", "code"):
+            v = args.get(k)
+            if isinstance(v, str):
+                return v
+        return _flatten(args)
+    return args if isinstance(args, str) else _flatten(args)
+
+
+def _command_head(cmd: str) -> str:
+    """The first real executable in the first pipeline segment (skipping env-var
+    assignments and wrapper commands like sudo/env/time), basename-normalised."""
+    seg = re.split(r"[|;&\n]", cmd, maxsplit=1)[0]
+    for tok in seg.split():
+        if re.match(r"^\w+=", tok):           # FOO=bar env assignment
+            continue
+        head = tok.split("/")[-1].lower()
+        if head in _CMD_WRAPPERS or not head:
+            continue
+        return head
+    return ""
+
+
+def _command_action_class(args: Any) -> str:
+    cmd = _command_string(args)
+    if _CRED_FILE_RE.search(cmd):
+        return "credential-access"
+    head = _command_head(cmd)
+    if head in _CMD_DELETE or re.search(r"\bdrop\s+table\b|\bdelete\s+from\b", cmd, re.I):
+        return "delete"
+    if head in _CMD_NETWORK:
+        return "external-send"
+    if head in _CMD_WRITE:
+        return "local-write"
+    if head in _CMD_READ:
+        return "read-only"
+    return "exec"
 
 
 def action_class(tool_name: str, args: Any) -> str:
-    """Coarse risk class of an action (the candidate-harm taxonomy)."""
+    """Risk class of an action, from its STRUCTURE: the tool name, or for command
+    tools the command head. Never scans the content the action carries."""
     name = (tool_name or "").lower()
-    a = _flatten(args)
-    for cls, name_pat, arg_pat in _ACTION_RULES:
-        if name_pat.search(name) and (arg_pat is None or arg_pat.search(a) or arg_pat.search(name)):
-            return cls
-        # command-style tools carry the verb in the args, not the name.
-        # NOTE: this name-pattern-over-args scan can incidentally over-match benign
-        # calls whose args contain a trigger substring (e.g. a path ".../post.ts" ->
-        # external-send). Preserved verbatim from credence-openclaw's safety.ts because
-        # the shipped harm warm-counts (data/brain/harm_brain.counts.json) were TRAINED
-        # against exactly this action_class; diverging would silently misalign the
-        # trained harm posterior. Revisit only with a retrained harm brain.
-        if arg_pat is None and name_pat.search(a):
+    if _COMMAND_TOOL_RE.search(name):
+        return _command_action_class(args)
+    target = producing_target(args) or ""
+    if _CRED_FILE_RE.search(target) or _CRED_FILE_RE.search(name):
+        return "credential-access"
+    for cls, rx in _TOOL_CLASS_RES:
+        if rx.search(name):
             return cls
     return "other"
 
@@ -366,6 +414,7 @@ def extract_safety(event: AgentToolEvent, session: Session) -> FeatureDict:
         "action-class": action_class(event.tool_name, event.input),
         "taint-flow": flow,
         "taint-source": _taint_source(event, flow, token_source, verbs, verb_source, imperative),
+        "target-externality": target_externality(event.tool_name, event.input),
         "injected-imperative": "yes" if imperative else "no",
         "cred-exfil-chain": "yes" if cred_exfil_chain else "no",
     }
