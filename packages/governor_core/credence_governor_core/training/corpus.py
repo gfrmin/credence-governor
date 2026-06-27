@@ -37,7 +37,8 @@ def _msg_text(m: dict[str, Any]) -> str:
 class LabeledCall:
     """One proposed tool call from a corpus trajectory, with its causal session
     context and the trajectory's safety labels (label is trajectory-level; harm
-    attribution to a specific call is done separately, see attribution.py)."""
+    attribution to a specific call is done separately, see
+    build_harm_brain.localize_harm)."""
 
     corpus: str
     session_id: str
