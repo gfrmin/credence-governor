@@ -64,12 +64,25 @@ def _ask_text(proposed: Any) -> str:
 # not the block's *motivation* — a repeated `rm` flagged as a waste loop must stay OVERRIDABLE,
 # not be hard-denied for being destructive. Deterministic feature inspection, no belief
 # arithmetic — so it lives here (server-side), not in the thin adapter (Invariant 1).
+#
+# M4: the hard/soft split reads `taint-source` (M2 provenance), the dual of the posterior
+# learning to discount own-sourced taint. An injected-imperative or external-target taint
+# whose value came from the agent's OWN footprint (read-own/command-own/local-own) is benign
+# provenance — editing security code you just read, not an attacker channel — so it is NOT a
+# hard safety deny. Recall-safe: genuine injections arrive via web/email/marker, which are
+# never an OWN class (an injection-shaped local file is classed `marker`, which stays hot).
+# `cred-exfil-chain` is structural (a credential-read → external-send chain) and stays hot
+# regardless of provenance.
+_OWN_SOURCES = {"read-own", "command-own", "local-own"}
+
+
 def _block_category(features: dict[str, str]) -> str:
-    hot = (
+    own = features.get("taint-source", "none") in _OWN_SOURCES
+    injection = (
         features.get("taint-flow", "none") == "tainted-external-target"
-        or features.get("cred-exfil-chain", "no") == "yes"
         or features.get("injected-imperative", "no") == "yes"
     )
+    hot = features.get("cred-exfil-chain", "no") == "yes" or (injection and not own)
     return "safety" if hot else "waste"
 
 
