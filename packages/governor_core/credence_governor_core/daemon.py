@@ -69,10 +69,15 @@ def _ask_text(proposed: Any) -> str:
 # learning to discount own-sourced taint. An injected-imperative or external-target taint
 # whose value came from the agent's OWN footprint (read-own/command-own/local-own) is benign
 # provenance — editing security code you just read, not an attacker channel — so it is NOT a
-# hard safety deny. Recall-safe: genuine injections arrive via web/email/marker, which are
-# never an OWN class (an injection-shaped local file is classed `marker`, which stays hot).
-# `cred-exfil-chain` is structural (a credential-read → external-send chain) and stays hot
-# regardless of provenance.
+# hard safety deny. `cred-exfil-chain` is structural (a credential-read → external-send chain)
+# and stays hot regardless of provenance.
+#
+# This is a deliberate recall TRADE, not free: an *unmarked* injection committed into the
+# agent's own workspace and then read is `read-own` and gets downgraded too. Two things bound
+# the exposure: (a) explicitly injection-shaped content is classed `marker` (safety.looks_untrusted),
+# which is NOT an OWN class and stays hot regardless of locality; (b) the downgrade is hard-deny
+# → overridable ASK, never a silent allow — the user still sees it. The keyword-marker coverage
+# is the recall floor here; widen looks_untrusted before relying on this for stronger threats.
 _OWN_SOURCES = {"read-own", "command-own", "local-own"}
 
 

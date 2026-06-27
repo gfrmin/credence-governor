@@ -12,6 +12,7 @@ which precede the proposed call (not yet in `messages`).
 from __future__ import annotations
 
 import json
+import os.path
 import re
 from typing import Any
 
@@ -238,14 +239,27 @@ def target_locality(path: str | None, trusted_paths: list[str], project_root: st
     """own | external | unknown — is ``path`` within the agent's declared own-footprint?
     Explicit trusted patterns (the agent's identity/config/state) match anywhere in the
     path; an absolute path is own iff under project_root; a relative path is own only
-    when a project_root is declared (it resolves to the agent's own working dir)."""
+    when a project_root is declared (it resolves to the agent's own working dir).
+
+    Paths are normalised first: a ``..`` component that escapes the working dir is NEVER
+    own (``../../etc/passwd`` definitionally leaves the footprint), and an absolute path
+    is contained against the normalised project_root — so traversal cannot textually
+    earn `own` provenance. M4 wires taint-source into the hard/soft split, so this is
+    enforcement-relevant, not just a feature value."""
     if not path:
         return "unknown"
+    norm = os.path.normpath(path)
+    if norm == ".." or norm.startswith(".." + os.sep):  # escapes the working dir → not own
+        return "external"
     for pat in trusted_paths:
-        if pat and pat in path:
+        if pat and pat in norm:
             return "own"
-    if path.startswith("/"):
-        return "own" if project_root and path.startswith(project_root) else "external"
+    if norm.startswith("/"):
+        if project_root:
+            root = os.path.normpath(project_root)
+            if norm == root or norm.startswith(root + os.sep):
+                return "own"
+        return "external"
     return "own" if project_root else "external"
 
 
