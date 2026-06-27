@@ -69,6 +69,18 @@ silent no-op until this daemon answers on `:8787`** — verify with
 `POST /decide` `{tool_name, input, session:{cwd, project_root, messages}}` →
 `{action, features, event_id}`.
 
+### Raw-event capture (opt-in)
+
+The observation log stores only the *extracted features* of each decision, so when
+the extractor gains a feature, past traffic cannot be re-derived. Set
+`CREDENCE_GOVERNOR_CAPTURE=1` (or a path) to additionally capture the raw
+`(tool_name, input, session)` of each governed call to `~/.credence-governor/raw_events.jsonl`
+— a **re-extractable** corpus a later feature-engineering pass folds in as benign
+negatives (`training.capture_corpus.load_capture`). **Off by default** (raw sessions
+carry file contents + commands); string fields are truncated to
+`CREDENCE_GOVERNOR_CAPTURE_MAXLEN` (default 8192). Non-causal: capture never feeds a
+belief or a decision.
+
 ## Tests
 
 ```bash

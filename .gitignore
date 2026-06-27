@@ -17,3 +17,6 @@ build/
 *.log
 .env
 .DS_Store
+
+# local raw-event capture corpus (opt-in; re-extractable training data)
+raw_events.jsonl
