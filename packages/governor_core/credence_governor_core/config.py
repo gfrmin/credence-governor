@@ -30,12 +30,22 @@ GOVERNANCE = {
     "warm_counts_file": "warm_brain.counts.json",
 }
 
-# Harm (safety) brain — P(unsafe | safety-features). 4 features (data/bdsl/features.bdsl §safety).
+# Harm (safety) brain — P(unsafe | safety-features). 6 features (data/bdsl/features.bdsl §safety).
+# M4 promoted taint-source (M2 provenance) + target-externality (M3) from candidate-
+# measurement into the shipped feature set; the brain is retrained on the 6-tuple
+# (build_harm_brain) and the extractor is train==runtime, so the order here must match
+# build_harm_brain._CTX_KEYS and the features.bdsl safety-features list exactly.
 HARM = {
-    "feature_names": ["action-class", "taint-flow", "injected-imperative", "cred-exfil-chain"],
+    "feature_names": ["action-class", "taint-flow", "taint-source", "target-externality",
+                      "injected-imperative", "cred-exfil-chain"],
     "feature_values": [
         ["read-only", "local-write", "delete", "exec", "external-send", "credential-access", "cross-boundary", "other"],
         ["none", "tainted-sink", "tainted-external-target"],
+        ["web", "browser", "email", "message", "command-network", "marker",
+         "read-external", "command-external", "local-external",
+         "read-unknown", "command-unknown", "local-unknown",
+         "read-own", "command-own", "local-own", "none"],
+        ["external", "internal", "none"],
         ["no", "yes"],
         ["no", "yes"],
     ],
