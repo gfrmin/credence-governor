@@ -15,14 +15,17 @@ from collections import defaultdict
 
 import pytest
 
+from credence_governor_core.config import HARM
 from credence_governor_core.safety import extract_safety
 from credence_governor_core.training.build_harm_brain import (
-    EXTENDED_CTX_KEYS,
     accumulate,
     fold_benign_negatives,
 )
 from credence_governor_core.training.corpus import load_atbench
 from credence_governor_core.training.fp_eval import BENIGN_CODING_CASES, benign_coding_calls
+
+# The shipped harm feature set (6-tuple post-M4); ctx[2] == taint-source, ctx[3] == target-externality.
+CTX_KEYS = HARM["feature_names"]
 
 _PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _CORPUS = os.path.join(_PKG, "data_corpora", "atbench_claw", "test.json")
@@ -50,7 +53,7 @@ def test_read_then_act_is_own_sourced():
 
 def test_fold_benign_negatives_adds_n0_only():
     counts: dict = defaultdict(lambda: [0, 0])
-    n = fold_benign_negatives(counts, benign_coding_calls(), EXTENDED_CTX_KEYS)
+    n = fold_benign_negatives(counts, benign_coding_calls(), CTX_KEYS)
     assert n == len(BENIGN_CODING_CASES)
     assert sum(n1 for _, n1 in counts.values()) == 0          # negatives never add harm
     assert sum(n0 for n0, _ in counts.values()) == n
@@ -58,9 +61,9 @@ def test_fold_benign_negatives_adds_n0_only():
 
 @_needs_corpus
 def test_cross_corpus_training_separates_own_from_external():
-    # Train on ATBench (attacks) + benign-coding (negatives) over the 5-feature set.
-    counts, _ = accumulate(load_atbench(_CORPUS), EXTENDED_CTX_KEYS)
-    fold_benign_negatives(counts, benign_coding_calls(), EXTENDED_CTX_KEYS)
+    # Train on ATBench (attacks) + benign-coding (negatives) over the shipped 6-feature set.
+    counts, _ = accumulate(load_atbench(_CORPUS), CTX_KEYS)
+    fold_benign_negatives(counts, benign_coding_calls(), CTX_KEYS)
 
     by_src: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for ctx, (n0, n1) in counts.items():
@@ -84,11 +87,11 @@ def test_distinctive_provenance_cells_are_benign():
     # The benign-coding cells with a DISTINCTIVE M2/M3 feature value (read-own) separate
     # cleanly even at curated-negative scale; generic cells (local-write/none, external-
     # send/internal) need coding-negative VOLUME (the real dogfood) and are not asserted.
-    counts, _ = accumulate(load_atbench(_CORPUS), EXTENDED_CTX_KEYS)
-    fold_benign_negatives(counts, benign_coding_calls(), EXTENDED_CTX_KEYS)
+    counts, _ = accumulate(load_atbench(_CORPUS), CTX_KEYS)
+    fold_benign_negatives(counts, benign_coding_calls(), CTX_KEYS)
     for c in BENIGN_CODING_CASES:
         if c.name in ("edit-security-code-after-read", "edit-file-after-reading-it"):
-            ctx = tuple(extract_safety(c.event, c.session)[k] for k in EXTENDED_CTX_KEYS)
+            ctx = tuple(extract_safety(c.event, c.session)[k] for k in CTX_KEYS)
             n0, n1 = counts[ctx]
             assert n1 == 0, f"{c.name} read-own cell carries harm: {ctx} -> {(n0, n1)}"
 
@@ -97,7 +100,7 @@ def test_distinctive_provenance_cells_are_benign():
 def test_target_externality_separates_external_send_at_the_extreme():
     # M3: external-send to an EXTERNAL target is the unambiguous-harm extreme; the
     # structure-BMA reads target-externality (ctx[3]) as its own feature.
-    counts, _ = accumulate(load_atbench(_CORPUS), EXTENDED_CTX_KEYS)
+    counts, _ = accumulate(load_atbench(_CORPUS), CTX_KEYS)
     by_te: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for ctx, (n0, n1) in counts.items():
         if ctx[0] == "external-send":

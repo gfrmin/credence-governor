@@ -1,10 +1,11 @@
 """test_build_harm_brain.py — the reproducible harm-brain build.
 
 The build's contract is *faithful aggregation*: the same corpus + the shared
-extractor reproduce the call/harm totals exactly and deterministically. The
-context ASSIGNMENT may differ from the shipped (forked-trained) artifact — that
-realignment delta is the M2/M4 target, not a build bug — so this test pins the
-totals and determinism, and asserts the well-formedness of every context.
+extractor reproduce the call/harm totals exactly and deterministically. Post-M4
+the build IS the shipped artifact (6-feature, benign negatives folded), so verify
+now conserves totals AND shows zero context drift — the shipped brain is
+reproducible from the committed extractor + corpus. This test pins the totals,
+determinism, and the well-formedness of every context.
 
 The 500-trajectory corpus lives under data_corpora/ (gitignored, not in CI), so
 the corpus-dependent tests skip when it is absent; the pure-logic tests
@@ -34,8 +35,9 @@ _SHIPPED = os.path.join(_PKG, "credence_governor_core", "data", "brain", "harm_b
 
 _needs_corpus = pytest.mark.skipif(not os.path.exists(_CORPUS), reason="ATBench corpus not staged (gitignored)")
 
-# Header invariants captured from the 2026-06-08 shipped build (the faithful-aggregation oracle).
-_N_CALLS = 2634
+# Attack-corpus invariants (ATBench test.json). build() folds the curated benign
+# negatives on top, so doc["n_calls"] = _N_ATTACK + len(BENIGN_CODING_CASES).
+_N_ATTACK = 2634
 _N_HARM = 217
 
 
@@ -70,12 +72,22 @@ def test_localize_harm_falls_back_to_last_sink():
 # ── corpus-dependent tests ───────────────────────────────────────────────────
 @_needs_corpus
 def test_build_totals_are_faithful():
+    from credence_governor_core.training.fp_eval import BENIGN_CODING_CASES
+
     doc = build(_CORPUS, "test")
-    assert doc["n_calls"] == _N_CALLS
+    assert doc["n_attack_calls"] == _N_ATTACK
+    assert doc["n_benign_negatives"] == len(BENIGN_CODING_CASES)
+    assert doc["n_calls"] == _N_ATTACK + len(BENIGN_CODING_CASES)
     assert doc["n_harm_labelled"] == _N_HARM
-    # totals are conserved across the per-context split
-    assert sum(c["n0"] + c["n1"] for c in doc["contexts"]) == _N_CALLS
+    # totals are conserved across the per-context split; benign folds in as n0 only
+    assert sum(c["n0"] + c["n1"] for c in doc["contexts"]) == doc["n_calls"]
     assert sum(c["n1"] for c in doc["contexts"]) == _N_HARM
+
+
+@_needs_corpus
+def test_build_without_benign_is_attack_only():
+    doc = build(_CORPUS, "test", fold_benign=False)
+    assert doc["n_calls"] == _N_ATTACK and doc["n_benign_negatives"] == 0
 
 
 @_needs_corpus
@@ -119,14 +131,16 @@ def test_every_context_is_well_formed():
 
 
 @_needs_corpus
-def test_verify_conserves_totals_against_shipped():
-    # The shared-extractor build reassigns contexts but must conserve the call/harm
-    # totals exactly — the attribution and corpus are identical, only the extractor
-    # (causal/provenance-blind vs forked) moves the per-context split.
+def test_shipped_brain_is_reproducible_from_extractor_and_corpus():
+    # Post-M4 the shipped harm_brain.counts.json IS build()'s output (6-feature, benign
+    # folded). verify must therefore show ZERO drift: same corpus + committed extractor
+    # reproduce the deployed posterior byte-for-byte. (Pre-M4 this asserted a >0 delta —
+    # the forked-vs-shared gap M4 closed. If this regresses, the shipped brain drifted
+    # from the extractor and must be rebuilt: `python -m ...build_harm_brain <corpus> --out`.)
     d = verify(_CORPUS, _SHIPPED)
     assert d["call_delta"] == 0
     assert d["harm_delta"] == 0
-    assert d["contexts_differing"] > 0  # there IS a realignment delta (M2/M4 closes it)
+    assert d["contexts_differing"] == 0
 
 
 @_needs_corpus
@@ -134,6 +148,6 @@ def test_accumulate_matches_build():
     from credence_governor_core.training.corpus import load_atbench
 
     counts, stats = accumulate(load_atbench(_CORPUS))
-    assert stats["n_calls"] == _N_CALLS
+    assert stats["n_calls"] == _N_ATTACK
     assert stats["n_harm_labelled"] == _N_HARM
     assert sum(n1 for _, n1 in counts.values()) == _N_HARM
