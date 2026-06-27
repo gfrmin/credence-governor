@@ -39,6 +39,9 @@ from ..safety import extract_safety, is_sink
 from .corpus import _atbench_events, iter_atbench_calls, load_atbench
 
 _CTX_KEYS = HARM["feature_names"]  # [action-class, taint-flow, injected-imperative, cred-exfil-chain]
+# Extended set for MEASURING a candidate feature (e.g. taint-source, M2) before it is
+# promoted into config.HARM + retrained at ship time. The shipped brain stays 4-feature.
+EXTENDED_CTX_KEYS = ["action-class", "taint-flow", "taint-source", "injected-imperative", "cred-exfil-chain"]
 
 # Attribution-only token rules (reason-text localisation). Deliberately NOT the
 # extractor's token set — this is "which call does the human reason point at",
@@ -105,9 +108,13 @@ def localize_harm(record: dict) -> set[int]:
     return hit
 
 
-def accumulate(records: list[dict]) -> tuple[dict[tuple[str, ...], list[int]], dict[str, int]]:
+def accumulate(records: list[dict], ctx_keys: list[str] | None = None,
+               ) -> tuple[dict[tuple[str, ...], list[int]], dict[str, int]]:
     """Per-context [n0, n1] over every call, using the shared extractor for the
-    context and reason-localisation for the n1 (harm) label."""
+    context and reason-localisation for the n1 (harm) label. ``ctx_keys`` selects the
+    feature tuple (defaults to the shipped 4; pass EXTENDED_CTX_KEYS to measure a
+    candidate feature like taint-source)."""
+    keys = ctx_keys or _CTX_KEYS
     counts: dict[tuple[str, ...], list[int]] = defaultdict(lambda: [0, 0])
     n_calls = n_harm = 0
     for i, record in enumerate(records):
@@ -116,7 +123,7 @@ def accumulate(records: list[dict]) -> tuple[dict[tuple[str, ...], list[int]], d
         harm_idxs = localize_harm(record) if unsafe else set()
         for call in iter_atbench_calls(record, sid):
             feats = extract_safety(call.event, call.session)
-            ctx = tuple(feats[k] for k in _CTX_KEYS)
+            ctx = tuple(feats[k] for k in keys)
             n_calls += 1
             if call.idx in harm_idxs:
                 counts[ctx][1] += 1
