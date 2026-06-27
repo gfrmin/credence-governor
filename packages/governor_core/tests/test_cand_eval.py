@@ -51,12 +51,13 @@ def test_metric_arithmetic_is_exact():
     assert m.traj_recall == 1.0         # the 1 unsafe trajectory fires
 
 
-def test_candidate_exception_is_a_non_fire():
+def test_candidate_exception_is_a_counted_non_fire():
     def boom(event, session):
         raise ValueError("candidate blew up")
 
     m = score_candidate(boom, _synthetic())
-    assert m.n_fire == 0  # exceptions are swallowed to non-fires, never crash the eval
+    assert m.n_fire == 0          # never crashes the eval
+    assert m.n_error == m.n_calls  # ...but a systematically-broken candidate reads as broken
 
 
 def test_benign_coding_fires_are_pure_false_positives():
@@ -91,3 +92,15 @@ def test_from_safety_feature_builds_a_working_candidate():
 def test_pooled_sums_across_sources():
     pooled = score_pooled(_fires_on_send, [_synthetic(), _synthetic()])
     assert pooled.n_calls == 6 and pooled.n_fire == 4 and pooled.n_harm == 2
+
+
+def test_pooled_traj_metrics_survive_session_id_collision():
+    # Both synthetic sources reuse session ids t1/t2; pooling must NOT collapse them
+    # into 2 buckets (the source-index prefix keeps them distinct), so there are 2
+    # unsafe trajectories (one t1 per source), both firing.
+    pooled = score_pooled(_fires_on_send, [_synthetic(), _synthetic()])
+    assert pooled.traj_recall == 1.0      # both unsafe trajectories fire
+    assert pooled.traj_precision == 0.5   # 2 unsafe + 2 safe trajectories all fire
+    # 4 distinct trajectories total (2 per source), not 2 collapsed
+    single = score_candidate(_fires_on_send, _synthetic())
+    assert pooled.n_calls == 2 * single.n_calls

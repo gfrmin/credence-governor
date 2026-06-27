@@ -13,7 +13,10 @@ the corpus-dependent tests skip when it is absent; the pure-logic tests
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+import sys
 
 import pytest
 
@@ -78,8 +81,25 @@ def test_build_totals_are_faithful():
 @_needs_corpus
 def test_build_is_deterministic():
     a, b = build(_CORPUS, "test"), build(_CORPUS, "test")
-    assert a["contexts"] == b["contexts"]
-    assert a["corpus_sha256"] == b["corpus_sha256"]
+    assert json.dumps(a, indent=4) == json.dumps(b, indent=4)  # byte-level, not just dict-eq
+
+
+@_needs_corpus
+def test_build_is_byte_reproducible_across_hashseeds(tmp_path):
+    # The load-bearing claim is byte-reproducibility across runs/machines. Build under
+    # two PYTHONHASHSEEDs in subprocesses: any set-iteration order leaking into the
+    # output (the classic nondeterminism) would diverge here.
+    env = dict(os.environ, PYTHONPATH=_PKG)
+    outs = []
+    for seed in ("0", "1"):
+        out = tmp_path / f"counts-{seed}.json"
+        subprocess.run(
+            [sys.executable, "-m", "credence_governor_core.training.build_harm_brain",
+             _CORPUS, "--out", str(out)],
+            check=True, capture_output=True, env=dict(env, PYTHONHASHSEED=seed),
+        )
+        outs.append(out.read_bytes())
+    assert outs[0] == outs[1]
 
 
 @_needs_corpus
