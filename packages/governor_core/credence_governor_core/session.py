@@ -75,8 +75,11 @@ class BrainSession:
                 {
                     "feature_names": HARM["feature_names"],
                     "feature_values": HARM["feature_values"],
-                    "alpha0": UTILITY["alpha0"],
-                    "beta0": UTILITY["beta0"],
+                    # Harm-specific base-rate prior (config.HARM); falls back to the shared
+                    # UTILITY prior if unset. Harm is rare, so the harm model must not assume
+                    # an unseen context is a 50/50 coin flip.
+                    "alpha0": HARM.get("alpha0", UTILITY["alpha0"]),
+                    "beta0": HARM.get("beta0", UTILITY["beta0"]),
                     "p_edge": UTILITY["p_edge"],
                     "warm_counts": harm_counts,
                 },

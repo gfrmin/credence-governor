@@ -50,6 +50,16 @@ HARM = {
         ["no", "yes"],
     ],
     "warm_counts_file": "harm_brain.counts.json",
+    # Harm-specific prior. The shared UTILITY prior (α0=β0=2, mean 0.5) treats an unseen
+    # context as a coin flip, but harm is RARE — the ATBench base rate is 217/2643 ≈ 0.082.
+    # So a sparse/unseen cell should default to "probably benign", not 50/50. This is an
+    # informative prior, not a gate: it leans benign (mean 0.10, slightly conservative
+    # above the base rate) with modest strength (5), so any cell with real attack counts
+    # still drives P(unsafe) up — recall on the genuine-signal cells is unchanged. Cells
+    # that genuinely collide (a benign edit vs a content-semantic attack note, identical in
+    # structure) stay near 0.5 → an overridable ask, which is the calibrated response.
+    "alpha0": 0.5,
+    "beta0": 4.5,
 }
 
 # Routing — P(correct | prompt-length); EU-max over the roster (data/bdsl/routing.bdsl).
