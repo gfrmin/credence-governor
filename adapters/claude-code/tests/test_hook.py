@@ -12,11 +12,29 @@ def _stub(monkeypatch, action: str) -> None:
     monkeypatch.setattr(hook.client, "decide", lambda _p: {"action": action, "features": {}})
 
 
-def test_enforce_mode_blocks(monkeypatch):
+def test_enforce_mode_blocks_overridably_by_default(monkeypatch):
+    # Default policy (no CREDENCE_GOVERNOR_DENY_CATEGORIES): a block is an OVERRIDABLE ask.
     monkeypatch.delenv("CREDENCE_GOVERNOR_SHADOW", raising=False)
+    monkeypatch.delenv("CREDENCE_GOVERNOR_DENY_CATEGORIES", raising=False)
     _stub(monkeypatch, "block")
     out = hook.handle({"hook_event_name": "PreToolUse"})
+    assert out["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_deny_categories_env_makes_block_hard(monkeypatch):
+    # An operator opts a category into non-overridable enforcement via the env setting.
+    monkeypatch.delenv("CREDENCE_GOVERNOR_SHADOW", raising=False)
+    monkeypatch.setenv("CREDENCE_GOVERNOR_DENY_CATEGORIES", "safety")
+    monkeypatch.setattr(hook.transcript, "session_from_hook", lambda _hi: {"tool_name": "Bash"})
+    monkeypatch.setattr(hook.client, "decide",
+                        lambda _p: {"action": "block", "category": "safety", "features": {}})
+    out = hook.handle({"hook_event_name": "PreToolUse"})
     assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    # a waste block under the same policy stays overridable
+    monkeypatch.setattr(hook.client, "decide",
+                        lambda _p: {"action": "block", "category": "waste", "features": {}})
+    out = hook.handle({"hook_event_name": "PreToolUse"})
+    assert out["hookSpecificOutput"]["permissionDecision"] == "ask"
 
 
 def test_shadow_mode_observes_only(monkeypatch):

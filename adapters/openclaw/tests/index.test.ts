@@ -18,7 +18,7 @@ const flush = () => new Promise((r) => setTimeout(r, 5));
 
 type Posted = Record<string, unknown>;
 
-function harness(postOk = true, shadowMode = false) {
+function harness(postOk = true, shadowMode = false, hardBlock = false) {
   const posted: Posted[] = [];
   let onSignal: ((s: SignalEnvelope) => void) | undefined;
   let closed = false;
@@ -43,6 +43,7 @@ function harness(postOk = true, shadowMode = false) {
     priceTable: buildPriceTable(undefined),
     redactToolInputs: false,
     shadowMode,
+    hardBlock,
     roster: [],
     profile: resolveProfile("balanced", undefined),
     log: () => {},
@@ -87,8 +88,19 @@ test("before_tool_call: proceed → allow (undefined), no awaiter leak", async (
   h.gov.cleanup();
 });
 
-test("before_tool_call: block → {block, blockReason}", async () => {
+test("before_tool_call: block (default) → OVERRIDABLE requireApproval", async () => {
   const h = harness();
+  const p = h.gov.beforeToolCall(ev(), ctx);
+  await flush();
+  h.signal("block", h.lastProposedId(), { reason: "runaway loop" });
+  const r = await p;
+  assert.ok(r?.requireApproval, "a block is overridable by default");
+  assert.match(r?.requireApproval?.description ?? "", /runaway loop/);
+  h.gov.cleanup();
+});
+
+test("before_tool_call: block with hardBlock → non-overridable {block, blockReason}", async () => {
+  const h = harness(true, false, true); // postOk, shadowMode=false, hardBlock=true
   const p = h.gov.beforeToolCall(ev(), ctx);
   await flush();
   h.signal("block", h.lastProposedId(), { reason: "runaway loop" });
@@ -170,6 +182,7 @@ test("redactToolInputs: tool input omitted from the sensor event", async () => {
     priceTable: buildPriceTable(undefined),
     redactToolInputs: true,
     shadowMode: false,
+    hardBlock: false,
     roster: [],
     profile: resolveProfile("balanced", undefined),
     log: () => {},

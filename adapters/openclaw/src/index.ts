@@ -181,58 +181,81 @@ export async function runStartupDaemonCheck(
   }
 }
 
+// Build an OVERRIDABLE approval (the human resolves allow/deny). Shared by the `ask`
+// effector and — by default — by `block`, so both surface to the operator rather than
+// hard-refusing. onResolution posts the mapped user-responded back to the brain.
+function approvalResult(
+  description: string,
+  originatingEventId: string,
+  client: DaemonClient,
+  approvalTimeoutMs: number,
+): BeforeToolCallResult {
+  const requireApproval: RequireApprovalPayload = {
+    title: "credence-openclaw governance",
+    description,
+    severity: "warning",
+    timeoutMs: approvalTimeoutMs,
+    timeoutBehavior: "deny",
+    allowedDecisions: ["allow-once", "allow-always", "deny"],
+    onResolution: async (decision) => {
+      const response =
+        decision === "allow-once" || decision === "allow-always"
+          ? "yes"
+          : decision === "deny"
+            ? "no"
+            : "timeout";
+      // Fire-and-forget: the brain conditions on the reply; OpenClaw has already
+      // enforced the decision. The daemon's follow-up signal is harmlessly dropped.
+      await client.postSensor({
+        event_type: "user-responded",
+        event_id: newEventId(),
+        in_response_to: originatingEventId,
+        timestamp: new Date().toISOString(),
+        response,
+      });
+    },
+  };
+  return { requireApproval };
+}
+
 export function mapSignal(
   sig: SignalEnvelope | undefined,
   originatingEventId: string,
   client: DaemonClient,
   approvalTimeoutMs: number,
+  hardBlock = false,
 ): BeforeToolCallResult | undefined {
   if (!sig) return undefined; // timeout / fail-open ⇒ proceed
   const p = sig.parameters ?? {};
   switch (sig.effector) {
     case "proceed":
       return undefined;
-    case "block":
-      return {
-        block: true,
-        blockReason: `credence-openclaw: ${
-          typeof p.reason === "string"
-            ? p.reason
-            : "tool call vetoed by expected-utility calculation"
-        }`,
-      };
-    case "ask": {
-      const description =
-        typeof p.text === "string" ? p.text : "Confirm this tool call?";
-      const requireApproval: RequireApprovalPayload = {
-        title: "credence-openclaw governance",
-        description,
-        severity: "warning",
-        timeoutMs: approvalTimeoutMs,
-        timeoutBehavior: "deny",
-        allowedDecisions: ["allow-once", "allow-always", "deny"],
-        onResolution: async (decision) => {
-          const response =
-            decision === "allow-once" || decision === "allow-always"
-              ? "yes"
-              : decision === "deny"
-                ? "no"
-                : "timeout";
-          // Fire-and-forget: the brain conditions on the reply; OpenClaw
-          // has already enforced the decision. The daemon's follow-up
-          // proceed/block signal is unneeded here and harmlessly dropped
-          // (no awaiter).
-          await client.postSensor({
-            event_type: "user-responded",
-            event_id: newEventId(),
-            in_response_to: originatingEventId,
-            timestamp: new Date().toISOString(),
-            response,
-          });
-        },
-      };
-      return { requireApproval };
+    case "block": {
+      const reason =
+        typeof p.reason === "string"
+          ? p.reason
+          : "tool call vetoed by expected-utility calculation";
+      // OVERRIDABLE by default: the governor surfaces the block for the human to
+      // resolve (the operator is the final authority; with finite harm-cost EU an
+      // override is admissible evidence, so nothing is categorically un-overridable).
+      // An operator wanting hard enforcement sets config.hardBlock (=> a true block).
+      if (hardBlock) {
+        return { block: true, blockReason: `credence-openclaw: ${reason}` };
+      }
+      return approvalResult(
+        `credence-openclaw flags this call: ${reason}. Approve to run anyway.`,
+        originatingEventId,
+        client,
+        approvalTimeoutMs,
+      );
     }
+    case "ask":
+      return approvalResult(
+        typeof p.text === "string" ? p.text : "Confirm this tool call?",
+        originatingEventId,
+        client,
+        approvalTimeoutMs,
+      );
     default:
       return undefined; // unknown effector ⇒ fail open
   }
@@ -273,6 +296,10 @@ export interface GovernorOpts {
    *  measure what governance WOULD do on real usage without affecting runs —
    *  the basis for counterfactual telemetry. Default false (enforcing). */
   shadowMode: boolean;
+  /** Overridability policy. Default false ⇒ a `block` is surfaced as an OVERRIDABLE
+   *  approval (the human is the final authority). Set true to make blocks a hard,
+   *  non-overridable refusal — the opt-in for operators who want strict enforcement. */
+  hardBlock: boolean;
   /** The user's model roster (discovered from api.config), sent in each route-request so the
    *  brain routes over the models OpenClaw actually has. Empty ⇒ routing is not registered. */
   roster: RoutingModel[];
@@ -306,7 +333,7 @@ export function createGovernor(
   opts: GovernorOpts,
 ): Governor {
   const { hookTimeoutMs, approvalTimeoutMs, priceTable, redactToolInputs,
-    shadowMode, roster, profile, log } = opts;
+    shadowMode, hardBlock, roster, profile, log } = opts;
   // One per-run message buffer. Feature & taint extraction is server-side in the daemon
   // (single-sourced in credence-governor-core); the body only maintains the neutral
   // session history the daemon extracts from — see session.ts.
@@ -439,7 +466,7 @@ export function createGovernor(
       return undefined;
     }
 
-    return mapSignal(sig, eventId, client, approvalTimeoutMs);
+    return mapSignal(sig, eventId, client, approvalTimeoutMs, hardBlock);
   }
 
   // before_model_resolve: route this turn to the EU-max model. Same wire as
@@ -574,6 +601,9 @@ const plugin: PluginEntry = {
     const silent = cfg.silent === true;
     const redactToolInputs = cfg.redactToolInputs === true;
     const shadowMode = cfg.shadowMode === true;
+    // Overridability: default OFF ⇒ blocks are overridable approvals (the human decides).
+    // Set hardBlock:true for strict, non-overridable enforcement.
+    const hardBlock = cfg.hardBlock === true;
     const routingEnabled = cfg.routing !== false; // model routing is ON by default
     // Opt-in (default OFF): auto-start the daemon if it's down at load. Config key OR
     // the cross-harness CREDENCE_GOVERNOR_AUTOSTART env — either enables; both default off.
@@ -620,11 +650,13 @@ const plugin: PluginEntry = {
       priceTable,
       redactToolInputs,
       shadowMode,
+      hardBlock,
       roster,
       profile,
       log,
     });
     if (shadowMode) log("credence-openclaw: SHADOW MODE — observing only, never enforcing");
+    if (hardBlock) log("credence-openclaw: hardBlock ON — blocks are non-overridable denials");
 
     api.on("before_tool_call", gov.beforeToolCall, {
       priority: 100,

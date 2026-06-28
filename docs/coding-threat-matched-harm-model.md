@@ -238,8 +238,18 @@ headroom.
 - **Invariant 1.** Body still carries zero probabilistic code. The brain
   conditions; EU-max decides. `target-sensitivity` / `egress-destination` /
   `action-class` are *feature extractions*, P-independent; `_block_category`'s
-  hard-vs-overridable split may consult them (deterministic label, no belief/EU
-  arithmetic), exactly as it consults provenance today. Fail-open is untouched.
+  category is now **advisory** (it shapes the human-facing message), no longer a
+  binding hard/soft gate. Fail-open is untouched.
+- **Overridability is policy, default all-overridable.** Every gated decision is an
+  overridable ask by default — the governor *surfaces* risk to the human operator,
+  who is the final authority; it never hard-refuses on its own. This is the
+  constitutionally consistent posture: with **finite** harm-cost `H`, a categorical
+  (infinite-disutility) deny is unjustified, and a human override is admissible
+  evidence that can flip the EU. Operators opt specific advisory categories into hard
+  `deny` per body — `CREDENCE_GOVERNOR_DENY_CATEGORIES` (Claude Code) / `hardBlock`
+  (OpenClaw). So even self-driven exfil surfaces as "approve?" rather than a silent
+  refusal; the protection (surfacing + explicit confirmation) is preserved, the
+  paternalism is not.
 - **Invariant 2.** Every new feature is declared structure: path-pattern sets and
   the egress allowlist are *data* (peers of `trusted_paths`), classified by the
   same machinery — no content regex standing in for structure.
