@@ -32,7 +32,12 @@ import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
-from ..safety import extract_safety
+from ..safety import (
+    coding_action_class,
+    egress_destination,
+    extract_safety,
+    target_sensitivity,
+)
 from ..schema import AgentToolEvent, Session
 from .build_harm_brain import localize_harm
 from .corpus import iter_atbench_calls, load_atbench
@@ -92,6 +97,31 @@ BUILTIN_CANDIDATES: dict[str, Candidate] = {
     "cred-exfil-chain": from_safety_feature("cred-exfil-chain", "yes"),
     "action=external-send": from_safety_feature("action-class", "external-send"),
     "any-taint": lambda e, s: extract_safety(e, s)["taint-flow"] != "none",
+}
+
+# ── M1 coding-threat-matched candidates (docs/coding-threat-matched-harm-model.md) ──
+# The three new/refined structural features, scored on the SAME pass: attack recall
+# on the corpora, false-positive fire-rate on benign coding. target-sensitivity needs
+# the session's footprint (trusted_paths/project_root); the others are pure on the call.
+def _sensitivity_is(value: str) -> Candidate:
+    def fires(event: AgentToolEvent, session: Session) -> bool:
+        return target_sensitivity(event.tool_name, event.input,
+                                  session.trusted_paths, session.project_root) == value
+    return fires
+
+
+def _coding_action_is(value: str) -> Candidate:
+    return lambda e, s: coding_action_class(e.tool_name, e.input) == value
+
+
+CODING_CANDIDATES: dict[str, Candidate] = {
+    "target=credential-store": _sensitivity_is("credential-store"),
+    "target=system-privileged": _sensitivity_is("system-privileged"),
+    "target=project-config": _sensitivity_is("project-config"),
+    "egress=external-unknown": lambda e, s: egress_destination(e.tool_name, e.input) == "external-unknown",
+    "action=destructive": _coding_action_is("destructive"),
+    "action=package-mutation": _coding_action_is("package-mutation"),
+    "action=privilege-op": _coding_action_is("privilege-op"),
 }
 
 
@@ -198,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     sources = [benign_coding_source()]
     if argv:
         sources.insert(0, atbench_source(argv[0]))
-    report(BUILTIN_CANDIDATES, sources)
+    report({**BUILTIN_CANDIDATES, **CODING_CANDIDATES}, sources)
     return 0
 
 
