@@ -1,19 +1,23 @@
 # Coding-threat-matched harm model (design sketch)
 
-Status: **active** — M1 (the three candidate features) + M2 (the declared coding
-red-team corpus) landed; M3–M4 open. Successor to the M1–M4 harm-feature arc
+Status: **active** — M1 (candidate features) + M2 (red-team corpus) + M3
+(enforcement: `_block_category` consults the M1 features) landed; M4 (promote +
+retrain the posterior) open. Successor to the M1–M4 harm-feature arc
 (`if-i-wanted-to-humble-harbor`). Supersedes the ATBench-trained harm brain
 *for the coding deployment*.
 
-> **M2 finding (sharper than §1's framing):** the mismatch is not only in the
-> training *distribution* — the shipped feature *extractors and hard-deny path are
+> **M2 finding → closed by M3.** The mismatch is not only in the training
+> *distribution* — the shipped feature *extractors and hard-deny path were
 > assistant-tool-shaped*. `tainted-external-target` / `cred-exfil-chain` /
 > `external-send` all key on a dedicated send TOOL name; coding exfil routes through
-> `bash`, so the shipped hard-deny catches **0%** of the red-team's 20 coding
-> attacks even though provenance resolves (`taint-source=web`). The M1 structural
-> features (`coding-action-class`, `target-sensitivity`, `egress`) restore recall
-> (18/18 structural). Closing the hard-deny gap is an M4-coupled `_block_category`
-> change (consult the new features), not an extractor edit (train==runtime).
+> `bash`, so the shipped hard-deny caught **0%** of the red-team's 20 coding attacks
+> even though provenance resolved (`taint-source=web`). **M3** closes it:
+> `_block_category` (a deterministic, P-independent LABEL — no belief/EU arithmetic,
+> Invariant 1 clean) now consults the M1 features, so data-exfil and
+> injection-triggered attacks hard-deny (injection-triggered 3/3, 7/20 total) while
+> self-driven consequential ops stay overridable and benign-coding hard-FP stays 0%.
+> This needed no retrain — the LABEL only refines an existing block, so it can upgrade
+> overridable→hard but never spuriously blocks or removes the host's safety.
 
 ## 0. One line
 
@@ -203,8 +207,8 @@ headroom.
 |---|---|
 | **M1** ✅ | `target-sensitivity` + coding `action-class` values + `egress` refinement as declared candidate features (`safety.{target_sensitivity,egress_destination,coding_action_class}`, `features.bdsl` `candidate-safety-features`); measured via `cand_eval`. Confirmed: high-precision, near-zero recall on ATBench, 0% benign-coding over-fire — the attack side must come from M2. |
 | **M2** ✅ | the declared coding red-team corpus (`training/red_team.py`, 20 attacks across §2, injection-triggered + residual variants), measured by `cand_eval`/`run_red_team`. M1 candidates fire precision-1.00, 18/18 structural recall, 0% benign FP. `red_team_calls()` feeds M4's n1. Surfaced the assistant-tool-shaped hard-deny gap (above). |
-| **M3** | accrue benign capture volume (background; M4b already streaming). |
-| **M4** | promote the M1 features into `config.HARM`; train the coding-native brain (`red_team_calls()` as n1, captured benign as n0); fix the assistant-shaped `_block_category` to consult `target-sensitivity` / coding egress so coding exfil hard-denies; validate recall against the red-team set + FP against captured benign; recalibrate `H/λ`; ship. Supersedes the ATBench harm brain for the coding body. |
+| **M3** ✅ | enforcement: `_block_category` consults the M1 features (`safety.extract_enforcement`, wired in `daemon._enforcement_view`) so data-exfil + injection-triggered coding attacks hard-deny without a retrain. P-independent label refinement (Invariant 1 clean); injection-triggered 3/3, 7/20 total, benign hard-FP 0%. Pinned by `test_decide_category.py` + `test_red_team.py::test_m3_enforcement_hard_denies_external_attacks`. |
+| **M4** | promote the M1 features into `config.HARM`; train the coding-native brain (`red_team_calls()` as n1, accrued captured benign as n0); validate recall against the red-team set + FP against captured benign; recalibrate `H/λ`; ship. Supersedes the ATBench harm brain for the coding body. (Benign-capture accrual is the background prep — M4b already streaming.) |
 
 M1 is the cheap, high-value start: the three feature changes close the recall
 hole on their own, independent of any retrain.

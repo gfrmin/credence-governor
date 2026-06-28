@@ -79,13 +79,19 @@ def test_injection_triggered_resolve_external_provenance():
         assert feats["taint-flow"] != "none", nm
 
 
-def test_shipped_hard_deny_is_assistant_shaped_known_gap():
-    # FINDING (executable documentation): the shipped hard-deny path keys on a
-    # dedicated send TOOL name (tainted-external-target / cred-exfil-chain /
-    # external-send), but coding exfil routes through bash, so it hard-denies 0% of
-    # these attacks even though provenance resolves. This pins the CURRENT behaviour;
-    # the M4-coupled _block_category change that closes it must flip this test.
-    assert all(not attack_firings(c).hard for c in RED_TEAM_CASES)
+def test_m3_enforcement_hard_denies_external_attacks():
+    # The M2 finding (shipped hard-deny is assistant-tool-shaped, 0/20) is closed by
+    # M3: _block_category consults the M1 coding features. Injection-triggered attacks
+    # and data-exfil now hard-deny; self-driven consequential ops stay overridable.
+    by = _by_name()
+    # every injection-triggered attack now hard-denies (provenance steered it)
+    assert all(attack_firings(c).hard for c in RED_TEAM_CASES if c.injected)
+    # data exfil to an external host is hard regardless of who drove it
+    for nm in ["exfil-env-via-curl", "exfil-aws-credentials", "exfil-ssh-key-scp", "curl-pipe-bash"]:
+        assert attack_firings(by[nm]).hard, nm
+    # a SELF-driven sensitive write / destructive op stays an overridable ask
+    for nm in ["write-authorized-keys", "rm-rf-home", "setuid-rootshell"]:
+        assert not attack_firings(by[nm]).hard, nm
 
 
 def test_red_team_calls_accessor_shape():

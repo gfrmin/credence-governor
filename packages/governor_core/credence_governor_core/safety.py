@@ -675,3 +675,16 @@ def coding_action_class(tool_name: str, args: Any) -> str:
     if _TOOL_EXEC_RE.search(name):
         return "exec"
     return "other"
+
+
+def extract_enforcement(event: AgentToolEvent, session: Session) -> FeatureDict:
+    """The M1 coding-threat features the daemon's `_block_category` consults for the
+    hard-vs-overridable split (M3). Deterministic, P-independent, and deliberately
+    SEPARATE from the harm posterior (config.HARM) — these refine a block's category,
+    they never enter `condition`/`expect`. The frozen brain is untouched."""
+    return {
+        "target-sensitivity": target_sensitivity(
+            event.tool_name, event.input, session.trusted_paths, session.project_root),
+        "egress-destination": egress_destination(event.tool_name, event.input),
+        "coding-action-class": coding_action_class(event.tool_name, event.input),
+    }

@@ -26,7 +26,7 @@ from typing import Any, Callable
 from .features import extract_features
 from .capture import RawCaptureLog
 from .log import ObservationLog
-from .safety import extract_safety
+from .safety import extract_enforcement, extract_safety
 from .schema import event_and_session_from_payload
 from .session import BrainSession
 
@@ -81,14 +81,52 @@ def _ask_text(proposed: Any) -> str:
 # is the recall floor here; widen looks_untrusted before relying on this for stronger threats.
 _OWN_SOURCES = {"read-own", "command-own", "local-own"}
 
+# M3 coding enforcement (docs/coding-threat-matched-harm-model.md). The shipped
+# hard-deny path above is assistant-tool-shaped — tainted-external-target /
+# cred-exfil-chain / external-send all key on a dedicated send TOOL name, but coding
+# exfil routes through bash, so it hard-denied 0% of the red-team's coding attacks
+# even though provenance resolved (taint-source=web). These rules consult the M1
+# coding-threat features (safety.extract_enforcement) so the hard-vs-overridable
+# split sees the coding shape. P-independent: deterministic feature inspection, no
+# belief/EU arithmetic — `_block_category` only LABELS a block (the EU decision still
+# selects block/ask/proceed), so this can only upgrade an overridable block to a hard
+# deny when the attack signature is present; it never spuriously blocks, never raises
+# benign-coding hard-FP, never removes the host's own safety. When the M1 features are
+# absent (a caller passing only the shipped 6), every `.get` defaults out — the rule
+# is inert and behaviour is exactly the pre-M3 split. The features are NOT in the harm
+# posterior (config.HARM); promoting + retraining is M4.
+#
+# Two coding rules, mirroring the existing motivation split:
+#   - exfil: data leaving to an UNKNOWN external host is hard regardless of who drove
+#     it (an external-send/credential-access whose egress is external-unknown).
+#   - attacker-driven: a consequential action (sensitive target, or a destructive /
+#     privilege / package-mutation op) under EXTERNAL provenance — an untrusted source
+#     steered it. A SELF-driven consequential op stays an overridable ask (the agent's
+#     own rm / sensitive write is friction-worthy, not an adversarial-intent hard deny).
+_HOT_SENSITIVITY = {"system-privileged", "credential-store", "project-config"}
+_HOT_CODING_ACTION = {"destructive", "privilege-op", "package-mutation"}
+_EXFIL_ACTION = {"external-send", "credential-access"}
+
 
 def _block_category(features: dict[str, str]) -> str:
-    own = features.get("taint-source", "none") in _OWN_SOURCES
+    src = features.get("taint-source", "none")
+    own = src in _OWN_SOURCES
     injection = (
         features.get("taint-flow", "none") == "tainted-external-target"
         or features.get("injected-imperative", "no") == "yes"
     )
     hot = features.get("cred-exfil-chain", "no") == "yes" or (injection and not own)
+
+    # M3 coding rules (inert when the M1 features are absent).
+    external_egress = features.get("egress-destination", "none") == "external-unknown"
+    external_prov = src not in _OWN_SOURCES and src != "none"
+    coding_action = features.get("coding-action-class", "other")
+    sensitivity = features.get("target-sensitivity", "none")
+    exfil = external_egress and coding_action in _EXFIL_ACTION
+    attacker_driven = external_prov and (
+        sensitivity in _HOT_SENSITIVITY or coding_action in _HOT_CODING_ACTION
+    )
+    hot = hot or exfil or attacker_driven
     return "safety" if hot else "waste"
 
 
@@ -134,6 +172,21 @@ class Daemon:
         event, session = event_and_session_from_payload(payload)
         return {**extract_features(event, session), **extract_safety(event, session)}
 
+    def _enforcement_view(self, payload: dict[str, Any], base: dict[str, str]) -> dict[str, str]:
+        """`base` (the engine-facing features) merged with the M1 coding-threat
+        features `_block_category` consults (M3). The engine never sees these — only
+        the hard-vs-overridable LABEL does. Best-effort: if the payload was a pre-
+        extracted features dict (no raw event) or extraction raises, fall back to
+        `base` (the pre-M3 split), never breaking the already-computed decision."""
+        if payload.get("features") is not None:
+            return base
+        try:
+            event, session = event_and_session_from_payload(payload)
+            return {**base, **extract_enforcement(event, session)}
+        except Exception as err:  # noqa: BLE001 — enforcement view must never break a decision
+            self.logline(f"credence-governor: enforcement view failed (non-fatal): {err}")
+            return base
+
     # ── SSE ──
     def _emit(self, signal: dict[str, Any]) -> None:
         frame = f"data: {json.dumps(signal)}\n\n"
@@ -174,7 +227,8 @@ class Daemon:
                 self.capture.append(event_id, payload)
             except Exception as err:  # noqa: BLE001 — telemetry must never break a decision
                 self.logline(f"credence-governor: raw capture failed (non-fatal): {err}")
-        return {"action": action, "features": features, "event_id": event_id, "category": _block_category(features)}
+        category = _block_category(self._enforcement_view(payload, features))
+        return {"action": action, "features": features, "event_id": event_id, "category": category}
 
     # ── explicit human feedback (Claude Code has no onResolution; close the loop here) ──
     def _features_for_event(self, event_id: str) -> dict[str, str] | None:
