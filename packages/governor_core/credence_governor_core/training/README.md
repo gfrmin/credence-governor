@@ -15,7 +15,7 @@ forked `credence_pi_eval` extractor that trained the shipped artifact.
 |---|---|
 | `corpus.py` | public agent-safety corpora → the neutral `(AgentToolEvent, Session)` stream, one `LabeledCall` per proposed call (causal: the session carries only prior messages). ATBench-Claw today; InjecAgent/AgentDojo/R-Judge/AgentHarm at M4. |
 | `validate_extraction.py` | does the live extractor reproduce the canonical (forked) per-call features? Reports per-feature agreement. Result: action-class/cred-exfil 100%, taint-flow 98.2%, injected-imperative 97.6% (divergences are canon-fires-live-none). |
-| `build_harm_brain.py` | the reproducible counts-build: corpus → `extract_safety` context + reason-localized harm attribution → `n0/n1` per `[action-class, taint-flow, injected-imperative, cred-exfil-chain]`. `--verify` reports the realignment delta vs the shipped artifact. |
+| `build_harm_brain.py` | the counts-build. **`build_coding` (M4, `--coding`) is the shipped path**: n1 = declared red-team, n0 = captured dogfood + curated benign, over the 7-tuple `extract_harm` context; ATBench retired. Legacy ATBench `build()`/`--verify` kept for provenance. |
 | `fp_eval.py` | the **benign coding-agent false-positive** eval (the attack corpora are assistant-attack; the deployment is a coding agent). Curated re-extractable cases + `snapshot_live_log()` for the real-distribution baseline. |
 | `cand_eval.py` | scores any candidate harm feature `(event, session) -> bool` — harm precision/recall/lift on attack corpora **and** fire-rate on benign coding, in one pass. Makes M2/M3 features measured, not asserted. |
 
@@ -51,6 +51,11 @@ $P python -m credence_governor_core.training.fp_eval ~/.credence-governor/observ
 
 # score the built-in candidates (attack recall vs coding FP)
 $P python -m credence_governor_core.training.cand_eval data_corpora/atbench_claw/test.json
+
+# M4 (shipped): build the coding-native brain — red-team n1 + captured-benign n0
+$P python -m credence_governor_core.training.build_harm_brain --coding \
+    --capture ~/.credence-governor/raw_events.jsonl \
+    --out credence_governor_core/data/brain/harm_brain.counts.json
 ```
 
 ## Current state (M1 baseline)
@@ -106,5 +111,29 @@ even though provenance resolved (`taint-source=web`). **M3** wires
 `safety.extract_enforcement` (the M1 features) into `daemon._block_category`: a
 deterministic, P-independent LABEL refinement (no belief/EU arithmetic) that
 upgrades data-exfil + injection-triggered blocks to hard deny without a retrain
-(injection-triggered 3/3, 7/20 total, benign hard-FP 0%). The features stay OUT of
-`config.HARM`; promoting + retraining the posterior is M4.
+(injection-triggered 3/3, 7/20 total, benign hard-FP 0%).
+
+### M4 — promote + retrain coding-native
+
+The three features are promoted into `config.HARM` (the 7-tuple
+`coding-action-class, target-sensitivity, egress-destination, taint-source,
+taint-flow, injected-imperative, cred-exfil-chain`), conditioned via one
+`safety.extract_harm` projection shared by the daemon (`features_for`) and the
+trainer (`build_coding`) — train==runtime by construction. The brain is **coding-
+native**: n1 = `red_team_calls()` (20 declared attacks), n0 = `load_capture()` (real
+dogfood, ~1.7k) + `benign_coding_calls()`. **ATBench is retired** for this body (its
+content-semantic attacks would re-pollute coding-benign cells; §4). Measured through
+the engine at `H=1.0`: **recall 15/20 block** (self-driven exfil now hard-DENY — the
+M3 boundary closed); the 4 misses are the §6 content tail (2 backdoor-logic + 2
+self-driven CI edits). An H-sweep held `H=1.0` (raising it adds FP, recovers no
+misses).
+
+Two hard-FP fixes the real-capture distribution surfaced: (1) `is_credential_access`
+made **structural** (the credential store as target, not the word "secret" in
+content) — the content-scan latched `cred-exfil-chain` across whole sessions whenever
+the agent edited security code, 62% of benign hard-deny labels; (2) `_block_category`
+recalibrated — `exfil` keys on **credential involvement** (a benign external-API curl
+is not exfil) and the hard rules gate on **confirmed-external provenance** (not
+`*-unknown` locality). Net **blocking hard-FP 4.0%→0.5%** over 600 real benign calls,
+recall unchanged. (`curl | bash` dropped hard-deny→overridable as the honest cost; a
+pipe-to-shell signal to restore it is a future refinement.)

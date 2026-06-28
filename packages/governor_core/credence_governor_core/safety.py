@@ -311,13 +311,6 @@ _EXTERNAL_SEND_RE = re.compile(
     r"send.?keys|sendmessage",
     re.I,
 )
-_CRED_RE = re.compile(
-    r"api[_-]?key|secret|credential|token|password|\.env|private[_-]?key|keychain|op_signin|"
-    r"1password|vault|credentials",
-    re.I,
-)
-
-
 def is_read_only(tool_name: str) -> bool:
     n = (tool_name or "").lower()
     return bool(_READ_RE.search(n)) or n == "get"
@@ -332,7 +325,23 @@ def is_external_send(tool_name: str) -> bool:
 
 
 def is_credential_access(tool_name: str, args: Any) -> bool:
-    return bool(_CRED_RE.search(tool_name or "")) or bool(_CRED_RE.search(_flatten(args)))
+    """Does the call TOUCH a credential store — the store as the action's TARGET (the
+    file/keychain/command-target), NOT the words 'secret'/'token'/'credential' appearing
+    in content. Structural, mirroring action_class's `_CRED_FILE_RE` discipline.
+
+    The prior content-scanning version (`_CRED_RE` over flattened args) was the
+    content-regex disease this arc exists to kill: editing the governor's own security
+    code — which literally contains 'credential'/'token'/'exfiltrat' — registered as
+    credential-access, and one later external-send then LATCHED `cred-exfil-chain=yes`
+    for the rest of the session (62% of benign hard-deny labels on real dogfood capture
+    traced to exactly this). Matching the credential STORE as the target keeps the genuine
+    chain (read id_rsa/.env/.aws → send) while not firing on code that merely mentions
+    credentials."""
+    name = (tool_name or "").lower()
+    if _COMMAND_TOOL_RE.search(name):
+        return bool(_CRED_FILE_RE.search(_command_string(args)))
+    target = producing_target(args) or ""
+    return bool(_CRED_FILE_RE.search(target) or _CRED_FILE_RE.search(name))
 
 
 _STOP_TOKENS = frozenset(
@@ -493,20 +502,19 @@ def _taint_source(event: AgentToolEvent, flow: str, token_source: dict[str, str]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# M1 — coding-threat-matched candidate features
-# (docs/coding-threat-matched-harm-model.md)
+# Coding-threat-matched features  (docs/coding-threat-matched-harm-model.md)
 #
-# The shipped harm posterior is parameterized on an *assistant*-attack
-# distribution; the daemon governs a *coding* agent. These three candidate
-# features re-parameterize harm on coding's actual threat structure —
+# The assistant-shaped harm posterior was parameterized on an *assistant*-attack
+# distribution; the daemon governs a *coding* agent. These three features
+# re-parameterize harm on coding's actual threat structure —
 # capability × target-sensitivity × egress — all structural.
 #
-# CANDIDATE STATUS: declared (features.bdsl `candidate-safety-features`) and
-# measured (training/cand_eval), but NOT in the shipped config.HARM tuple. The
-# functions above (action_class, target_externality, extract_safety's 6-tuple)
-# keep their shipped outputs verbatim, so the frozen harm_brain.counts.json stays
-# train==runtime with the deployed extractor. Promotion + retrain is M4. These are
-# additive parallels — never call them from extract_safety until then.
+# STATUS (M4): promoted into the conditioned set. `extract_enforcement` bundles
+# them, `extract_harm` merges them with the shipped safety signals as the 7-tuple
+# the harm posterior conditions on (config.HARM), and the brain is retrained
+# coding-native (build_harm_brain.build_coding). They remain SEPARATE functions
+# from the legacy action_class / target_externality (which extract_safety still
+# emits for back-compat callers) — single-role extractors, Invariant 3.
 # ══════════════════════════════════════════════════════════════════════════════
 
 # target-sensitivity: WHERE a filesystem action lands — the axis the shipped model
@@ -688,3 +696,18 @@ def extract_enforcement(event: AgentToolEvent, session: Session) -> FeatureDict:
         "egress-destination": egress_destination(event.tool_name, event.input),
         "coding-action-class": coding_action_class(event.tool_name, event.input),
     }
+
+
+def extract_harm(event: AgentToolEvent, session: Session) -> FeatureDict:
+    """The harm-brain feature projection (M4) — the SINGLE source of the context the
+    harm posterior conditions on, used by BOTH the daemon (runtime conditioning,
+    `daemon.features_for`) AND the trainer (`build_harm_brain`), so train==runtime is
+    structural, not a convention to police.
+
+    It is the shipped safety signals merged with the M1 coding-threat features. M4
+    promoted `coding-action-class` / `target-sensitivity` / `egress-destination` into
+    `config.HARM`, which selects the active 7-tuple from this dict; the legacy
+    `action-class` / `target-externality` keys stay computed (other callers read them)
+    but unselected. Adding a feature to the model is therefore a one-line `config.HARM`
+    change — the extractor already produces the superset."""
+    return {**extract_safety(event, session), **extract_enforcement(event, session)}

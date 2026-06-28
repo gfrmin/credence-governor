@@ -26,7 +26,6 @@ from credence_governor_core.training.build_harm_brain import (
     accumulate,
     build,
     localize_harm,
-    verify,
 )
 
 _PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -130,17 +129,36 @@ def test_every_context_is_well_formed():
         assert c["n0"] >= 0 and c["n1"] >= 0 and (c["n0"] + c["n1"]) > 0
 
 
-@_needs_corpus
-def test_shipped_brain_is_reproducible_from_extractor_and_corpus():
-    # Post-M4 the shipped harm_brain.counts.json IS build()'s output (6-feature, benign
-    # folded). verify must therefore show ZERO drift: same corpus + committed extractor
-    # reproduce the deployed posterior byte-for-byte. (Pre-M4 this asserted a >0 delta —
-    # the forked-vs-shared gap M4 closed. If this regresses, the shipped brain drifted
-    # from the extractor and must be rebuilt: `python -m ...build_harm_brain <corpus> --out`.)
-    d = verify(_CORPUS, _SHIPPED)
-    assert d["call_delta"] == 0
-    assert d["harm_delta"] == 0
-    assert d["contexts_differing"] == 0
+# ── coding-native shipped brain (M4: ATBench retired for the coding body) ─────
+def test_shipped_brain_matches_config_feature_names():
+    # The boot invariant: the committed harm_brain.counts.json declares the SAME
+    # feature_names (and column order) as config.HARM, else session.boot() refuses to
+    # start. A drift here is a silent harm-feature mis-map; pin it without the engine.
+    with open(_SHIPPED) as f:
+        doc = json.load(f)
+    assert doc["feature_names"] == HARM["feature_names"]
+    valid = [set(v) for v in HARM["feature_values"]]
+    for c in doc["contexts"]:
+        assert len(c["ctx"]) == len(HARM["feature_names"])
+        for value, allowed in zip(c["ctx"], valid):
+            assert value in allowed, f"{value} not a declared value"
+
+
+def test_shipped_brain_carries_the_red_team_attack_cells():
+    # The shipped coding brain folds the declared red-team as n1. The capture-derived n0
+    # is private growing dogfood (not byte-reproducible; §5), but the attack side IS — the
+    # red-team's structural threat cells (credential-store, system-privileged, destructive…)
+    # must appear with harm in the shipped artifact, or the posterior cannot block them.
+    from credence_governor_core.training.build_harm_brain import build_coding
+    from credence_governor_core.training.red_team import red_team_calls
+
+    with open(_SHIPPED) as f:
+        shipped = json.load(f)
+    assert shipped["n_attack_positives"] == len(red_team_calls())
+    assert sum(c["n1"] for c in shipped["contexts"]) >= len(red_team_calls()) - 2  # ≤2 collide into a benign cell
+    # the attack-only build (no capture) is deterministic + reproduces the n1 side
+    attack = build_coding()
+    assert attack["n_attack_positives"] == len(red_team_calls())
 
 
 @_needs_corpus

@@ -30,22 +30,29 @@ GOVERNANCE = {
     "warm_counts_file": "warm_brain.counts.json",
 }
 
-# Harm (safety) brain — P(unsafe | safety-features). 6 features (data/bdsl/features.bdsl §safety).
-# M4 promoted taint-source (M2 provenance) + target-externality (M3) from candidate-
-# measurement into the shipped feature set; the brain is retrained on the 6-tuple
-# (build_harm_brain) and the extractor is train==runtime, so the order here must match
-# build_harm_brain._CTX_KEYS and the features.bdsl safety-features list exactly.
+# Harm (safety) brain — P(unsafe | safety-features). 7 features (data/bdsl/features.bdsl §safety).
+# The coding-threat-matched model (docs/coding-threat-matched-harm-model.md §3): the
+# coding-native ACTION axis (coding-action-class), the WHERE axis the assistant model
+# lacked (target-sensitivity), and the refined egress axis (egress-destination) replace
+# the assistant-shaped `action-class` / `target-externality`; the provenance trio +
+# cred-exfil-chain are kept. The brain is trained coding-native (build_harm_brain.build_coding:
+# red-team n1 + captured-benign n0, ATBench retired for this body) and the extractor is
+# train==runtime (safety.extract_harm), so the order here MUST match build_harm_brain._CTX_KEYS
+# and the features.bdsl safety-features list exactly (boot asserts the committed brain agrees).
 HARM = {
-    "feature_names": ["action-class", "taint-flow", "taint-source", "target-externality",
-                      "injected-imperative", "cred-exfil-chain"],
+    "feature_names": ["coding-action-class", "target-sensitivity", "egress-destination",
+                      "taint-source", "taint-flow", "injected-imperative", "cred-exfil-chain"],
     "feature_values": [
-        ["read-only", "local-write", "delete", "exec", "external-send", "credential-access", "cross-boundary", "other"],
-        ["none", "tainted-sink", "tainted-external-target"],
+        ["read-only", "local-edit", "destructive", "external-send", "credential-access",
+         "package-mutation", "privilege-op", "exec", "other"],
+        ["project-source", "project-config", "credential-store", "system-privileged",
+         "external-unknown", "none"],
+        ["none", "loopback", "internal-net", "external-allowlisted", "external-unknown"],
         ["web", "browser", "email", "message", "command-network", "marker",
          "read-external", "command-external", "local-external",
          "read-unknown", "command-unknown", "local-unknown",
          "read-own", "command-own", "local-own", "none"],
-        ["external", "internal", "none"],
+        ["none", "tainted-sink", "tainted-external-target"],
         ["no", "yes"],
         ["no", "yes"],
     ],

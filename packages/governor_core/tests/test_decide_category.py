@@ -53,11 +53,36 @@ def test_decide_response_carries_category(tmp_path):
 
 # ── M3 coding enforcement (docs/coding-threat-matched-harm-model.md) ──────────
 def test_m3_exfil_external_egress_is_hard():
-    # Data leaving to an unknown external host is hard regardless of who drove it.
+    # CREDENTIAL data leaving to an unknown external host is hard regardless of who drove it.
     assert _block_category({"egress-destination": "external-unknown",
                             "coding-action-class": "credential-access"}) == "safety"
     assert _block_category({"egress-destination": "external-unknown",
-                            "coding-action-class": "external-send"}) == "safety"
+                            "target-sensitivity": "credential-store"}) == "safety"
+
+
+def test_m4_plain_external_send_to_external_is_overridable():
+    # The recalibration: a plain external-send to an external host is a benign API curl /
+    # gh api / docker pull — NOT exfil. Only credential involvement makes egress hard.
+    # (Real dogfood: 600-benign hard-FP fell 4.0% -> 0.5% on exactly this distinction.)
+    assert _block_category({"egress-destination": "external-unknown",
+                            "coding-action-class": "external-send"}) == "waste"
+    assert _block_category({"egress-destination": "external-unknown",
+                            "coding-action-class": "local-write"}) == "waste"
+
+
+def test_m4_unknown_provenance_consequential_is_not_attacker_driven():
+    # *-unknown locality (a read that couldn't be placed — common when trusted_paths is
+    # unset) is NOT evidence an attacker steered the action. A destructive / package-mutation
+    # op under local-unknown provenance stays overridable; only CONFIRMED-external does.
+    assert _block_category({"taint-source": "local-unknown",
+                            "coding-action-class": "destructive"}) == "waste"
+    assert _block_category({"taint-source": "command-unknown",
+                            "coding-action-class": "package-mutation"}) == "waste"
+    # confirmed-external provenance + the same action IS hard
+    assert _block_category({"taint-source": "web",
+                            "coding-action-class": "destructive"}) == "safety"
+    assert _block_category({"taint-source": "local-external",
+                            "target-sensitivity": "system-privileged"}) == "safety"
 
 
 def test_m3_attacker_driven_consequential_is_hard():
