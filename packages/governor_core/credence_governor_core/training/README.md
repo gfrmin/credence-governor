@@ -98,11 +98,13 @@ backdoor-logic cases are the honest content-semantic residual). `red_team_calls(
 hands the positives to M4's retrain (the n1 side), the twin of
 `benign_coding_calls()`.
 
-**Finding (carried to M4):** the *shipped* hard-deny path is **assistant-tool-
+**Finding → closed by M3.** The *shipped* hard-deny path was **assistant-tool-
 shaped** — `tainted-external-target` / `cred-exfil-chain` / `external-send` all key
 on a dedicated send TOOL name, but coding exfil routes through `bash`
-(`is_external_send("bash")` is false), so it hard-denies **0%** of these attacks
-even though provenance resolves (`taint-source=web`). Closing it is an M4-coupled
-`_block_category` change (consult `target-sensitivity` / coding egress), not an
-extractor edit (train==runtime with the frozen brain). Pinned by
-`test_red_team.py::test_shipped_hard_deny_is_assistant_shaped_known_gap`.
+(`is_external_send("bash")` is false), so it hard-denied **0%** of these attacks
+even though provenance resolved (`taint-source=web`). **M3** wires
+`safety.extract_enforcement` (the M1 features) into `daemon._block_category`: a
+deterministic, P-independent LABEL refinement (no belief/EU arithmetic) that
+upgrades data-exfil + injection-triggered blocks to hard deny without a retrain
+(injection-triggered 3/3, 7/20 total, benign hard-FP 0%). The features stay OUT of
+`config.HARM`; promoting + retraining the posterior is M4.

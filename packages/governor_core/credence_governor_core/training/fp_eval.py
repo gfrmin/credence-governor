@@ -34,7 +34,7 @@ import sys
 from dataclasses import dataclass, field
 
 from ..daemon import _block_category
-from ..safety import extract_safety
+from ..safety import extract_enforcement, extract_safety
 from ..schema import AgentToolEvent, Message, Session
 
 # action-class values that ELEVATE the harm posterior (a soft / overridable over-fire
@@ -169,7 +169,11 @@ def fp_firings(features: dict[str, str]) -> FPFirings:
 
 
 def evaluate_case(case: BenignCase) -> FPFirings:
-    return fp_firings(extract_safety(case.event, case.session))
+    # Merge the M1 enforcement view (M3) so a benign hard-FP from the coding
+    # _block_category rules would be caught here, not just the shipped 6-tuple.
+    feats = {**extract_safety(case.event, case.session),
+             **extract_enforcement(case.event, case.session)}
+    return fp_firings(feats)
 
 
 def benign_coding_calls() -> list[tuple[AgentToolEvent, Session]]:
