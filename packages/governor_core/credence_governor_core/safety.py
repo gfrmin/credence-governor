@@ -490,3 +490,184 @@ def _taint_source(event: AgentToolEvent, flow: str, token_source: dict[str, str]
             if re.search(r"\b" + v + r"\b", blob):
                 matched.add(verb_source.get(v, "local-unknown"))  # a real class in _SOURCE_EXTERNALITY
     return _most_external(matched)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M1 — coding-threat-matched candidate features
+# (docs/coding-threat-matched-harm-model.md)
+#
+# The shipped harm posterior is parameterized on an *assistant*-attack
+# distribution; the daemon governs a *coding* agent. These three candidate
+# features re-parameterize harm on coding's actual threat structure —
+# capability × target-sensitivity × egress — all structural.
+#
+# CANDIDATE STATUS: declared (features.bdsl `candidate-safety-features`) and
+# measured (training/cand_eval), but NOT in the shipped config.HARM tuple. The
+# functions above (action_class, target_externality, extract_safety's 6-tuple)
+# keep their shipped outputs verbatim, so the frozen harm_brain.counts.json stays
+# train==runtime with the deployed extractor. Promotion + retrain is M4. These are
+# additive parallels — never call them from extract_safety until then.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# target-sensitivity: WHERE a filesystem action lands — the axis the shipped model
+# lacks. Orthogonal to action-class's WHAT (a `local-edit` is benign on project
+# source, alarming on a credential store). Declared path-pattern sets (Invariant 2),
+# matched on the target PATH only, never on content. Highest blast radius first.
+_CRED_STORE_RE = re.compile(
+    r"\.env\b|(^|/)id_(rsa|ed25519|ecdsa|dsa)\b|\.pem\b|private[_-]?key|"
+    r"credentials?(\.json)?\b|(^|/)\.aws/|(^|/)\.npmrc\b|(^|/)\.pypirc\b|\.netrc\b|"
+    r"\.git-credentials\b|keychain|(^|/)\.docker/config\.json|secrets?\.(ya?ml|json|env)\b",
+    re.I)
+_SYSTEM_PRIV_RE = re.compile(
+    r"(^|/)\.ssh/|authorized_keys|(^|/)etc/|/sudoers\b|(^|/)\.(bashrc|zshrc|bash_profile|"
+    r"zprofile|profile|bash_login|zshenv)\b|(^|/)cron|crontab|(^|/)\.config/systemd/|"
+    r"/systemd/|\.service\b|(^|/)(usr|boot|sys|sbin)/",
+    re.I)
+_PROJECT_CONFIG_RE = re.compile(
+    r"\.github/workflows/|(^|/)dockerfile|docker-compose|\.tf\b|\.tfvars\b|(^|/)\.gitlab-ci|"
+    r"(^|/)\.circleci/|(^|/)makefile\b|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|"
+    r"poetry\.lock|cargo\.lock|go\.sum|(^|/)(package|composer)\.json|pyproject\.toml|"
+    r"requirements[\w.-]*\.txt|(^|/)setup\.(py|cfg)\b|(^|/)gemfile",
+    re.I)
+
+
+def target_sensitivity(tool_name: str, args: Any, trusted_paths: list[str],
+                       project_root: str = "") -> str:
+    """Sensitivity of an action's filesystem target — the missing axis (M1).
+    credential-store | system-privileged | project-config | project-source |
+    external-unknown | none. credential/system/config patterns match a path
+    ANYWHERE (a credential store is sensitive wherever it lives); otherwise the
+    target's locality places it in or out of the agent's own footprint."""
+    path = producing_target(args)
+    if not path:
+        return "none"
+    if _CRED_STORE_RE.search(path):
+        return "credential-store"
+    if _SYSTEM_PRIV_RE.search(path):
+        return "system-privileged"
+    if _PROJECT_CONFIG_RE.search(path):
+        return "project-config"
+    loc = target_locality(path, list(trusted_paths or []), project_root)
+    return "project-source" if loc == "own" else "external-unknown"
+
+
+# egress-destination: refines target-externality with the dev-vs-exfil splits the
+# binary internal/external axis blurred. Most-external destination wins.
+_LOOPBACK_RE = re.compile(r"\b(127\.\d+\.\d+\.\d+|localhost|0\.0\.0\.0)\b|::1", re.I)
+_INTERNAL_HOST_RE = re.compile(
+    r"\b(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)\b|"
+    r"\.(local|internal|corp|company|lan|home)\b",
+    re.I)
+# Known package/code/model hosts a coding agent legitimately reaches. DATA (Invariant 2).
+_ALLOWLIST_HOSTS_RE = re.compile(
+    r"\b(github\.com|raw\.githubusercontent\.com|api\.github\.com|gitlab\.com|"
+    r"pypi\.org|files\.pythonhosted\.org|registry\.npmjs\.org|npmjs\.com|"
+    r"crates\.io|rubygems\.org|proxy\.golang\.org|api\.anthropic\.com|"
+    r"api\.openai\.com|huggingface\.co|registry-1\.docker\.io|docker\.io)\b",
+    re.I)
+_EGRESS_RANK = {"none": 0, "loopback": 1, "internal-net": 2,
+                "external-allowlisted": 3, "external-unknown": 4}
+
+
+def _classify_destination(token: str) -> str:
+    if _LOOPBACK_RE.search(token):
+        return "loopback"
+    if _INTERNAL_HOST_RE.search(token):
+        return "internal-net"
+    if _ALLOWLIST_HOSTS_RE.search(token):
+        return "external-allowlisted"
+    return "external-unknown"
+
+
+def egress_destination(tool_name: str, args: Any) -> str:
+    """Where the action's data leaves to (M1): none | loopback | internal-net |
+    external-allowlisted | external-unknown. Reads only DESTINATION fields (the same
+    discipline target_externality follows), never the content blob."""
+    a = _target_text(args)
+    dests = re.findall(_URL, a) + re.findall(_EMAIL, a)
+    if _PUBLIC_PATH.search(a):
+        dests.append("external")  # a public/outbox/shared path is an egress with no host
+    if not dests:
+        # a bare recipient/channel with no concrete host => internal addressing
+        return "internal-net" if re.search(r"\bchannel\b|recipient|to:", a) else "none"
+    worst = "none"
+    for d in dests:
+        cls = _classify_destination(d)
+        if _EGRESS_RANK[cls] > _EGRESS_RANK[worst]:
+            worst = cls
+    return worst
+
+
+# coding action-class: extends the shipped action_class with coding-native classes
+# (destructive / package-mutation / privilege-op) the assistant model never needed.
+# Same structural derivation — tool name, or for command tools the command — never
+# a content scan.
+_PKG_MANAGERS = {"npm", "yarn", "pnpm", "pip", "pip3", "poetry", "pipx", "cargo",
+                 "gem", "go", "apt", "apt-get", "brew", "conda", "uv", "bundle",
+                 "mvn", "gradle", "nix", "dnf", "yum"}
+_PKG_SUBCMDS = {"install", "add", "i", "get", "publish", "update", "upgrade"}
+_PKG_MANIFEST_RE = re.compile(
+    r"package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|cargo\.lock|go\.sum|"
+    r"(^|/)(package|composer)\.json|requirements[\w.-]*\.txt|(^|/)gemfile",
+    re.I)
+_GIT_DESTRUCTIVE_RE = re.compile(
+    r"git\s+(reset\s+--hard|push\s+(-f\b|--force)|clean\s+-[a-z]*f|checkout\s+--\s)", re.I)
+_SQL_DESTRUCTIVE_RE = re.compile(
+    r"\b(drop\s+(table|database)|truncate\s+table|delete\s+from)\b", re.I)
+_PRIVILEGE_RE = re.compile(
+    r"\bchmod\s+[ugoa]*\+s\b|\bchmod\s+[0-7]*[4-7][0-7]{3}\b|\bchown\s+root\b|\bvisudo\b|"
+    r"\buseradd\b|\busermod\b|\bpasswd\b|\bssh-keygen\b|authorized_keys",
+    re.I)
+_TOOL_DESTRUCTIVE_RE = re.compile(r"\b(rm|unlink|rmdir|delete|remove|trash|drop|truncate)\b", re.I)
+_TOOL_WRITE_RE = re.compile(
+    r"\b(write|edit|create|apply_patch|patch|update|append|insert|move|mv|copy|cp|notebook_edit)\b", re.I)
+_TOOL_READ_RE = re.compile(
+    r"\b(read|cat|head|tail|ls|grep|find|search|get|list|print|fetch|capture|"
+    r"transcript|view|show|envelope|browser|browse|screenshot)\b", re.I)
+_TOOL_EXEC_RE = re.compile(r"\b(exec|run|cron|invoke|trigger|deploy|gateway|api|process)\b", re.I)
+
+
+def _coding_command_class(args: Any) -> str:
+    cmd = _command_string(args)
+    if _CRED_FILE_RE.search(cmd):
+        return "credential-access"
+    if _NETWORK_SINK_RE.search(cmd):
+        return "external-send"
+    head = _command_head(cmd)
+    toks = set(re.split(r"\s+", cmd.lower()))
+    if (head in _PKG_MANAGERS and toks & _PKG_SUBCMDS) or _PKG_MANIFEST_RE.search(cmd):
+        return "package-mutation"
+    if _DELETE_SINK_RE.search(cmd) or _GIT_DESTRUCTIVE_RE.search(cmd) or _SQL_DESTRUCTIVE_RE.search(cmd):
+        return "destructive"
+    if _PRIVILEGE_RE.search(cmd):
+        return "privilege-op"
+    if head in _CMD_WRITE or _REDIRECT_RE.search(cmd):
+        return "local-edit"
+    if head in _CMD_READ:
+        return "read-only"
+    return "exec"
+
+
+def coding_action_class(tool_name: str, args: Any) -> str:
+    """The coding-native risk class (M1): read-only | local-edit | destructive |
+    external-send | credential-access | package-mutation | privilege-op | exec |
+    other. Structural — tool name, or for command tools the command — never content."""
+    name = (tool_name or "").lower()
+    if _COMMAND_TOOL_RE.search(name):
+        return _coding_command_class(args)
+    target = producing_target(args) or ""
+    if _CRED_FILE_RE.search(target) or _CRED_FILE_RE.search(name):
+        return "credential-access"
+    if _PKG_MANIFEST_RE.search(target):
+        return "package-mutation"
+    if _TOOL_DESTRUCTIVE_RE.search(name):
+        return "destructive"
+    if _EXTERNAL_SEND_RE.search(name):
+        return "external-send"
+    if _TOOL_WRITE_RE.search(name):
+        return "local-edit"
+    if _TOOL_READ_RE.search(name):
+        return "read-only"
+    if _TOOL_EXEC_RE.search(name):
+        return "exec"
+    return "other"

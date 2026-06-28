@@ -68,3 +68,19 @@ M2 (provenance-aware seeding) closes the `injected-imperative`/taint FP; M3
 (structure-based `action_class`) closes the `external-send` FP. M4 rebuilds the
 prior with the M2+M3 extractor and ships. The shipped artifact stays **frozen**
 until then.
+
+## Coding-threat-matched candidates (next arc, M1)
+
+`cand_eval` also scores the **coding-threat-matched** candidates
+(`docs/coding-threat-matched-harm-model.md`): `target-sensitivity` (the missing
+*where* axis — `credential-store` / `system-privileged` / `project-config` / …),
+the `egress-destination` refinement (`loopback` / `external-allowlisted` / …),
+and the coding-native `action-class` values (`destructive` / `package-mutation` /
+`privilege-op`). They are CANDIDATES — declared in `features.bdsl`
+(`candidate-safety-features`), extracted by `safety.{target_sensitivity,
+egress_destination,coding_action_class}`, but NOT in the shipped `config.HARM`
+tuple, so the frozen brain stays train==runtime. The eval confirms the thesis:
+these structural features fire with high precision but **near-zero recall on
+ATBench** (an assistant-attack corpus has few coding-structural threats) — so the
+attack side must come from a declared coding red-team corpus (the next arc's M2),
+not ATBench.

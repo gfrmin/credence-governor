@@ -94,3 +94,38 @@
     (feature target-externality  target-externality-space)
     (feature injected-imperative injected-imperative-space)
     (feature cred-exfil-chain    cred-exfil-chain-space)))
+
+; ── Candidate safety features (M1, coding-threat-matched harm model) ─────
+; docs/coding-threat-matched-harm-model.md. The shipped harm posterior above is
+; parameterized on an *assistant*-attack distribution; the daemon governs a
+; *coding* agent. These re-parameterize harm on coding's actual threat structure
+; (capability × target-sensitivity × egress), all structural.
+;
+; CANDIDATE, not shipped: declared here and measured (training/cand_eval), but
+; deliberately OUTSIDE safety-features — manifest.parse_features scopes extractor
+; checks to (define features ...), and config.HARM still carries the frozen
+; 6-tuple, so boot + train==runtime are untouched. Promotion + retrain is M4.
+
+; WHERE a filesystem action lands — the axis the shipped model lacks. Orthogonal
+; to action-class's WHAT: a local-edit is benign on project-source, alarming on a
+; credential-store. Closes the live recall hole (write ~/.ssh/authorized_keys and
+; CI-workflow backdoors today extract as benign source edits).
+(define target-sensitivity-space
+  (space :finite project-source project-config credential-store system-privileged external-unknown none))
+
+; Refines target-externality with the dev-vs-exfil splits the binary internal/
+; external axis blurred: a curl to 127.0.0.1 is loopback (benign dev), a fetch
+; from pypi.org is external-allowlisted, an unknown host is external-unknown.
+(define egress-destination-space
+  (space :finite none loopback internal-net external-allowlisted external-unknown))
+
+; Coding-native action classes (destructive / package-mutation / privilege-op)
+; the assistant model never needed. Structural — tool name or command head.
+(define coding-action-class-space
+  (space :finite read-only local-edit destructive external-send credential-access package-mutation privilege-op exec other))
+
+(define candidate-safety-features
+  (list
+    (feature target-sensitivity   target-sensitivity-space)
+    (feature egress-destination   egress-destination-space)
+    (feature coding-action-class  coding-action-class-space)))
