@@ -86,30 +86,21 @@
 (define cred-exfil-chain-space
   (space :finite no yes))
 
-(define safety-features
-  (list
-    (feature action-class        action-class-space)
-    (feature taint-flow          taint-flow-space)
-    (feature taint-source        taint-source-space)
-    (feature target-externality  target-externality-space)
-    (feature injected-imperative injected-imperative-space)
-    (feature cred-exfil-chain    cred-exfil-chain-space)))
+; ── Coding-threat-matched safety features (M4, coding-threat-matched harm model) ──
+; docs/coding-threat-matched-harm-model.md §3. The provenance trio (taint-source,
+; taint-flow, injected-imperative) + cred-exfil-chain are kept; the assistant-shaped
+; action-class / target-externality are REPLACED by coding's actual threat axes:
+; capability (coding-action-class), WHERE the action lands (target-sensitivity — the
+; axis the assistant model lacked), and a refined egress (egress-destination). Trained
+; coding-native (build_harm_brain.build_coding: declared red-team n1 + captured-benign
+; n0; ATBench retired for this body). action-class-space / target-externality-space
+; stay DEFINED above — extract_safety still emits them and other callers read them —
+; but are no longer in the conditioned set.
 
-; ── Candidate safety features (M1, coding-threat-matched harm model) ─────
-; docs/coding-threat-matched-harm-model.md. The shipped harm posterior above is
-; parameterized on an *assistant*-attack distribution; the daemon governs a
-; *coding* agent. These re-parameterize harm on coding's actual threat structure
-; (capability × target-sensitivity × egress), all structural.
-;
-; CANDIDATE, not shipped: declared here and measured (training/cand_eval), but
-; deliberately OUTSIDE safety-features — manifest.parse_features scopes extractor
-; checks to (define features ...), and config.HARM still carries the frozen
-; 6-tuple, so boot + train==runtime are untouched. Promotion + retrain is M4.
-
-; WHERE a filesystem action lands — the axis the shipped model lacks. Orthogonal
-; to action-class's WHAT: a local-edit is benign on project-source, alarming on a
-; credential-store. Closes the live recall hole (write ~/.ssh/authorized_keys and
-; CI-workflow backdoors today extract as benign source edits).
+; WHERE a filesystem action lands — the axis the assistant model lacked. Orthogonal
+; to coding-action-class's WHAT: a local-edit is benign on project-source, alarming on a
+; credential-store. Closes the recall hole (write ~/.ssh/authorized_keys and CI-workflow
+; backdoors extracted as benign source edits on the assistant model).
 (define target-sensitivity-space
   (space :finite project-source project-config credential-store system-privileged external-unknown none))
 
@@ -124,8 +115,14 @@
 (define coding-action-class-space
   (space :finite read-only local-edit destructive external-send credential-access package-mutation privilege-op exec other))
 
-(define candidate-safety-features
+; The conditioned harm 7-tuple. Order MUST match config.HARM["feature_names"] and
+; build_harm_brain._CTX_KEYS (boot asserts the committed brain agrees).
+(define safety-features
   (list
-    (feature target-sensitivity   target-sensitivity-space)
-    (feature egress-destination   egress-destination-space)
-    (feature coding-action-class  coding-action-class-space)))
+    (feature coding-action-class coding-action-class-space)
+    (feature target-sensitivity  target-sensitivity-space)
+    (feature egress-destination  egress-destination-space)
+    (feature taint-source        taint-source-space)
+    (feature taint-flow          taint-flow-space)
+    (feature injected-imperative injected-imperative-space)
+    (feature cred-exfil-chain    cred-exfil-chain-space)))

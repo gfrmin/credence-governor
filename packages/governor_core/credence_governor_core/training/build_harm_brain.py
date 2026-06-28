@@ -36,9 +36,11 @@ import sys
 from collections import defaultdict
 
 from ..config import HARM
-from ..safety import extract_safety, is_sink
+from ..safety import extract_harm, is_sink
+from .capture_corpus import load_capture
 from .corpus import _atbench_events, iter_atbench_calls, load_atbench
 from .fp_eval import benign_coding_calls
+from .red_team import red_team_calls
 
 # The shipped 6-tuple (M4 promoted taint-source + target-externality from candidate-
 # measurement into config.HARM). Single source of truth: the order tracks config.HARM
@@ -124,7 +126,7 @@ def accumulate(records: list[dict], ctx_keys: list[str] | None = None,
         unsafe = not bool(record.get("labels", {}).get("is_safe", True))
         harm_idxs = localize_harm(record) if unsafe else set()
         for call in iter_atbench_calls(record, sid):
-            feats = extract_safety(call.event, call.session)
+            feats = extract_harm(call.event, call.session)
             ctx = tuple(feats[k] for k in keys)
             n_calls += 1
             if call.idx in harm_idxs:
@@ -144,8 +146,26 @@ def fold_benign_negatives(counts: dict[tuple[str, ...], list[int]],
     keys = ctx_keys or _CTX_KEYS
     n = 0
     for event, session in calls:
-        feats = extract_safety(event, session)
+        feats = extract_harm(event, session)
         counts[tuple(feats[k] for k in keys)][0] += 1
+        n += 1
+    return n
+
+
+def fold_attack_positives(counts: dict[tuple[str, ...], list[int]],
+                          calls, ctx_keys: list[str] | None = None) -> int:
+    """Fold declared coding attacks as n1 POSITIVES — the attack-side twin of
+    fold_benign_negatives. Each call IS the harmful action (call-level positive, the
+    analogue of the red-team's all-positive cases), re-extracted by `extract_harm`
+    (train==runtime). This is priors-as-data done honestly: known-threat *structure*
+    written down as a declared corpus, not a posterior bent posthoc — the cell prior
+    stays symmetric, risk-aversion stays in the utility H/λ. ``calls`` is an iterable
+    of (event, session)."""
+    keys = ctx_keys or _CTX_KEYS
+    n = 0
+    for event, session in calls:
+        feats = extract_harm(event, session)
+        counts[tuple(feats[k] for k in keys)][1] += 1
         n += 1
     return n
 
@@ -192,6 +212,45 @@ def build(corpus_path: str, corpus_label: str, *, fold_benign: bool = True) -> d
     }
 
 
+def build_coding(capture_path: str | None = None, *, include_truncated: bool = False) -> dict:
+    """The coding-native harm brain (M4; docs/coding-threat-matched-harm-model.md §5).
+
+    n1 = the declared coding red-team corpus (`red_team_calls`); n0 = the curated
+    benign-coding negatives + (when a capture path is given) real captured dogfood
+    traffic (`load_capture`). **ATBench is RETIRED for this body**: its content-semantic
+    assistant attacks would re-pollute coding-benign cells (§4), and capture supplies the
+    benign coding distribution directly (§5). The two halves use the SAME `extract_harm`
+    the daemon runs (train==runtime).
+
+    Deterministic: contexts sorted, no wall-clock embedded — same corpus + capture
+    reproduce byte-for-byte; provenance is the capture path + the per-side counts."""
+    counts: dict[tuple[str, ...], list[int]] = defaultdict(lambda: [0, 0])
+    n1 = fold_attack_positives(counts, red_team_calls())
+    n0_curated = fold_benign_negatives(counts, benign_coding_calls())
+    n0_capture = (
+        fold_benign_negatives(counts, load_capture(capture_path, include_truncated=include_truncated))
+        if capture_path else 0
+    )
+    contexts = [
+        {"ctx": list(ctx), "n0": n0, "n1": n1c}
+        for ctx, (n0, n1c) in sorted(counts.items())
+    ]
+    return {
+        "attribution": "call-level (the declared red-team proposed call IS the n1 positive; benign traffic is n0)",
+        "extractor": "credence_governor_core.safety.extract_harm (shared 7-tuple, causal, train==runtime)",
+        "feature_names": list(_CTX_KEYS),
+        "corpus": "coding-native: declared red-team (n1) + curated-benign + captured dogfood (n0); ATBench retired",
+        "capture_path": capture_path or "(none)",
+        "n_calls": n1 + n0_curated + n0_capture,
+        "n_attack_positives": n1,
+        "n_benign_curated": n0_curated,
+        "n_benign_captured": n0_capture,
+        "n_contexts": len(contexts),
+        "note": "Daemon reconstructs the posterior by replaying these counts via structure_bma.",
+        "contexts": contexts,
+    }
+
+
 def _load_context_map(path: str) -> dict[tuple[str, ...], list[int]]:
     with open(path) as f:
         doc = json.load(f)
@@ -231,14 +290,32 @@ def verify(corpus_path: str, shipped_path: str) -> dict[str, float]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Build/verify harm_brain.counts.json from a corpus.")
-    ap.add_argument("corpus", help="path to an ATBench test.json")
+    ap = argparse.ArgumentParser(description="Build/verify harm_brain.counts.json.")
+    ap.add_argument("corpus", nargs="?", help="path to an ATBench test.json (legacy build/verify)")
+    ap.add_argument("--coding", action="store_true",
+                    help="build the coding-native brain (red-team n1 + capture/benign n0; ATBench retired) — the shipped M4 path")
+    ap.add_argument("--capture", help="raw_events.jsonl path for the benign n0 (with --coding)")
     ap.add_argument("--out", help="write the counts artifact here")
-    ap.add_argument("--verify", help="compare the shared-extractor build to this shipped counts.json")
+    ap.add_argument("--verify", help="compare the shared-extractor build to this shipped counts.json (legacy ATBench)")
     ap.add_argument("--label", default="AI45Research/ATBench-Claw (test.json, Apache-2.0)",
                     help="corpus label recorded in the header")
     args = ap.parse_args(argv)
 
+    if args.coding:
+        doc = build_coding(args.capture)
+        text = json.dumps(doc, indent=4)
+        if args.out:
+            with open(args.out, "w") as f:
+                f.write(text + "\n")
+            print(f"wrote {args.out}: {doc['n_calls']} calls "
+                  f"({doc['n_attack_positives']} attack n1, {doc['n_benign_curated']}+{doc['n_benign_captured']} benign n0), "
+                  f"{doc['n_contexts']} contexts")
+        else:
+            print(text)
+        return 0
+
+    if not args.corpus:
+        ap.error("a corpus path is required unless --coding is given")
     if args.verify:
         verify(args.corpus, args.verify)
         return 0

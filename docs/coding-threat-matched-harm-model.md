@@ -1,10 +1,38 @@
 # Coding-threat-matched harm model (design sketch)
 
 Status: **active** — M1 (candidate features) + M2 (red-team corpus) + M3
-(enforcement: `_block_category` consults the M1 features) landed; M4 (promote +
-retrain the posterior) open. Successor to the M1–M4 harm-feature arc
+(enforcement: `_block_category` consults the M1 features) + **M4 (promote + retrain
+the posterior coding-native)** landed. Successor to the M1–M4 harm-feature arc
 (`if-i-wanted-to-humble-harbor`). Supersedes the ATBench-trained harm brain
 *for the coding deployment*.
+
+> **M4 result (measured through the engine).** The three coding features are promoted
+> into `config.HARM` (a 7-tuple: `coding-action-class, target-sensitivity,
+> egress-destination` + the kept provenance trio + `cred-exfil-chain`), conditioned via
+> one `safety.extract_harm` projection used by BOTH the daemon and `build_harm_brain`
+> (train==runtime). The brain is trained **coding-native** — n1 = the declared red-team
+> (20), n0 = real dogfood capture (~1.7k) + curated benign; **ATBench retired** for this
+> body. At the shipped `H=1.0`: **recall 15/20 block (16/20 gated)**, and crucially the
+> three **self-driven exfil** cases (`exfil-env-via-curl`, `…-aws-credentials`,
+> `…-ssh-key-scp`) now **hard-DENY** — the M3 boundary (self-driven exfil returned
+> `proceed`) is closed. An H-sweep showed raising H does not recover the misses (only
+> adds FP), so **H stays 1.0** — risk-aversion needs no re-tuning; the misses are
+> structural. The 4 misses are 2 `backdoor-logic` (the §6 content tail) + 2 self-driven
+> `ci-infra` edits (see the §2 refinement below).
+>
+> **Two hard-FP fixes surfaced by real capture** (a benign hard-deny is the worst UX
+> failure): (1) `is_credential_access` was **content-scanning** — editing the governor's
+> own security code (dense with "credential"/"token") latched `cred-exfil-chain` across a
+> whole session; made **structural** (the credential store as target), dropping the benign
+> hard-*label* rate 41%→16%. (2) `_block_category` was over-broad on real traffic — its
+> `exfil` rule fired on benign external-API curls, and `attacker_driven` treated
+> `*-unknown` locality as attacker provenance; recalibrated so **exfil keys on credential
+> involvement** and the hard rules **gate on confirmed-external provenance**. Net:
+> **blocking hard-FP 4.0%→0.5%** over 600 real benign calls, recall unchanged. One trade:
+> `curl | bash` (supply-chain RCE) is structurally identical to a benign API curl, so it
+> dropped from hard-deny to **overridable block** (the posterior still blocks it); a
+> dedicated pipe-to-shell signal to restore the hard deny without the FP is a future
+> refinement.
 
 > **M2 finding → closed by M3.** The mismatch is not only in the training
 > *distribution* — the shipped feature *extractors and hard-deny path were
@@ -156,6 +184,16 @@ P(unsafe | action-class, target-sensitivity, egress-destination,
   `target-sensitivity = system-privileged` → high-harm; a backdoor in
   `.github/workflows/` → `project-config`. The current model rated both as benign
   source edits.
+  - **Measured refinement (M4).** This closes the *injection-triggered* half cleanly
+    (`write ~/.ssh/authorized_keys` from a fetched README → `system-privileged` +
+    confirmed-external provenance → hard-deny). But a **self-driven** CI/config backdoor
+    (`local-edit × project-config`, own provenance) is **content-residual** like
+    backdoor-logic: a coding agent *legitimately* edits CI/Dockerfiles/compose files
+    often, so `P(unsafe | local-edit × project-config)` is genuinely low and only the
+    *content* (a curl-exfil line in the workflow) distinguishes malicious from benign.
+    `target-sensitivity` *raises* the harm estimate there but not past the benign base
+    rate. So 2 of M4's 4 recall misses are self-driven `ci-infra` edits — folded into the
+    §6 content-semantic tail, not a separate hole.
 - Benign localhost-curl → `egress = loopback`, real exfil → `external-unknown`.
 
 ## 5. Training data — and where capture earns its keep
@@ -218,7 +256,7 @@ headroom.
 | **M1** ✅ | `target-sensitivity` + coding `action-class` values + `egress` refinement as declared candidate features (`safety.{target_sensitivity,egress_destination,coding_action_class}`, `features.bdsl` `candidate-safety-features`); measured via `cand_eval`. Confirmed: high-precision, near-zero recall on ATBench, 0% benign-coding over-fire — the attack side must come from M2. |
 | **M2** ✅ | the declared coding red-team corpus (`training/red_team.py`, 20 attacks across §2, injection-triggered + residual variants), measured by `cand_eval`/`run_red_team`. M1 candidates fire precision-1.00, 18/18 structural recall, 0% benign FP. `red_team_calls()` feeds M4's n1. Surfaced the assistant-tool-shaped hard-deny gap (above). |
 | **M3** ✅ | enforcement: `_block_category` consults the M1 features (`safety.extract_enforcement`, wired in `daemon._enforcement_view`) so data-exfil + injection-triggered coding attacks hard-deny without a retrain. P-independent label refinement (Invariant 1 clean); injection-triggered 3/3, 7/20 total, benign hard-FP 0%. Pinned by `test_decide_category.py` + `test_red_team.py::test_m3_enforcement_hard_denies_external_attacks`. |
-| **M4** | promote the M1 features into `config.HARM`; train the coding-native brain (`red_team_calls()` as n1, accrued captured benign as n0); validate recall against the red-team set + FP against captured benign; recalibrate `H/λ`; ship. Supersedes the ATBench harm brain for the coding body. (Benign-capture accrual is the background prep — M4b already streaming.) |
+| **M4** ✅ | promoted the three features into `config.HARM` (7-tuple, conditioned via `extract_harm`); trained coding-native (`red_team_calls()` n1 + captured-benign n0; ATBench retired); validated through the engine (recall 15/20, self-driven exfil now hard-DENY). `H=1.0` held (H-sweep: raising it adds FP, recovers no misses). Two hard-FP fixes from real capture: structural `is_credential_access` (label 41%→16%) + `_block_category` recalibration (blocking hard-FP 4.0%→0.5%), recall preserved. |
 
 M1 is the cheap, high-value start: the three feature changes close the recall
 hole on their own, independent of any retrain.

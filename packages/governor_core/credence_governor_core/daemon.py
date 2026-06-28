@@ -26,7 +26,7 @@ from typing import Any, Callable
 from .features import extract_features
 from .capture import RawCaptureLog
 from .log import ObservationLog
-from .safety import extract_enforcement, extract_safety
+from .safety import extract_harm
 from .schema import event_and_session_from_payload
 from .session import BrainSession
 
@@ -81,20 +81,20 @@ def _ask_text(proposed: Any) -> str:
 # is the recall floor here; widen looks_untrusted before relying on this for stronger threats.
 _OWN_SOURCES = {"read-own", "command-own", "local-own"}
 
-# M3 coding enforcement (docs/coding-threat-matched-harm-model.md). The shipped
-# hard-deny path above is assistant-tool-shaped — tainted-external-target /
-# cred-exfil-chain / external-send all key on a dedicated send TOOL name, but coding
-# exfil routes through bash, so it hard-denied 0% of the red-team's coding attacks
-# even though provenance resolved (taint-source=web). These rules consult the M1
-# coding-threat features (safety.extract_enforcement) so the hard-vs-overridable
-# split sees the coding shape. P-independent: deterministic feature inspection, no
-# belief/EU arithmetic — `_block_category` only LABELS a block (the EU decision still
-# selects block/ask/proceed), so this can only upgrade an overridable block to a hard
-# deny when the attack signature is present; it never spuriously blocks, never raises
-# benign-coding hard-FP, never removes the host's own safety. When the M1 features are
-# absent (a caller passing only the shipped 6), every `.get` defaults out — the rule
-# is inert and behaviour is exactly the pre-M3 split. The features are NOT in the harm
-# posterior (config.HARM); promoting + retraining is M4.
+# Coding enforcement (docs/coding-threat-matched-harm-model.md). The shipped hard-deny
+# path above is assistant-tool-shaped — tainted-external-target / cred-exfil-chain /
+# external-send all key on a dedicated send TOOL name, but coding exfil routes through
+# bash, so it hard-denied 0% of the red-team's coding attacks even though provenance
+# resolved (taint-source=web). These rules consult the coding-threat features (now part
+# of the conditioned 7-tuple, safety.extract_harm) so the hard-vs-overridable split sees
+# the coding shape. P-independent: deterministic feature inspection, no belief/EU
+# arithmetic — `_block_category` only LABELS a block (the EU decision still selects
+# block/ask/proceed), so this can only upgrade an overridable block to a hard deny when
+# the attack signature is present; it never spuriously blocks, never raises benign-coding
+# hard-FP, never removes the host's own safety. When a caller passes only the shipped 6
+# (no coding-threat keys), every `.get` defaults out — the rule is inert and behaviour is
+# the pre-coding split. (M4 promoted these same features INTO the posterior, so the EU
+# decision now also blocks self-driven coding exfil the label alone could not escalate.)
 #
 # Two coding rules, mirroring the existing motivation split:
 #   - exfil: data leaving to an UNKNOWN external host is hard regardless of who drove
@@ -105,24 +105,51 @@ _OWN_SOURCES = {"read-own", "command-own", "local-own"}
 #     own rm / sensitive write is friction-worthy, not an adversarial-intent hard deny).
 _HOT_SENSITIVITY = {"system-privileged", "credential-store", "project-config"}
 _HOT_CODING_ACTION = {"destructive", "privilege-op", "package-mutation"}
-_EXFIL_ACTION = {"external-send", "credential-access"}
+# CONFIRMED-external provenance: source classes that are genuinely untrusted (web /
+# email / fetched markers / *-external), as opposed to the *-unknown classes
+# (indeterminate locality — a read whose target couldn't be placed) or *-own (the
+# agent's own footprint). The hard rules gate on CONFIRMED external: treating
+# unknown-locality as attacker provenance hard-denied benign coding at scale (real
+# reads resolve to *-unknown whenever trusted_paths is unset, which is the common case),
+# while the genuine injection signal always carries a confirmed-external source.
+_EXTERNAL_SOURCES = {
+    "web", "browser", "email", "message", "command-network", "marker",
+    "read-external", "command-external", "local-external",
+}
 
 
 def _block_category(features: dict[str, str]) -> str:
     src = features.get("taint-source", "none")
     own = src in _OWN_SOURCES
+    # Confirmed-external provenance — genuinely untrusted, as opposed to *-unknown
+    # (indeterminate locality) or *-own. attacker_driven needs this stronger bar (see below).
+    external_prov = src in _EXTERNAL_SOURCES
     injection = (
         features.get("taint-flow", "none") == "tainted-external-target"
         or features.get("injected-imperative", "no") == "yes"
     )
+    # injection hard-denies when NOT own-sourced (the M3 threshold, live-verified): an
+    # injected imperative / external-target taint from anything but the agent's own
+    # footprint is an attacker channel. cred-exfil-chain is structural and stays hot.
     hot = features.get("cred-exfil-chain", "no") == "yes" or (injection and not own)
 
-    # M3 coding rules (inert when the M1 features are absent).
+    # Coding rules (inert when the coding-threat features are absent).
     external_egress = features.get("egress-destination", "none") == "external-unknown"
-    external_prov = src not in _OWN_SOURCES and src != "none"
     coding_action = features.get("coding-action-class", "other")
     sensitivity = features.get("target-sensitivity", "none")
-    exfil = external_egress and coding_action in _EXFIL_ACTION
+    # exfil: CREDENTIAL-store data leaving to an unknown external host, regardless of who
+    # drove it. A plain external-send to an external host (a benign API curl, a `gh api`,
+    # a `docker compose` pull) is NOT exfil — the credential involvement is what makes the
+    # egress adversarial. Keyed on the credential signal, not the bare external-send.
+    exfil = external_egress and (
+        coding_action == "credential-access" or sensitivity == "credential-store"
+    )
+    # attacker-driven: an untrusted source steered a consequential action (sensitive
+    # target, or a destructive / privilege / package-mutation op). Gated on CONFIRMED
+    # external provenance — *-unknown locality (a read that couldn't be placed, the common
+    # case when trusted_paths is unset) is NOT evidence of steering, and treating it as
+    # such hard-denied benign coding (rm of a scratch file, `gh api .../package.json`) en
+    # masse. Self-driven and unknown-provenance consequential ops stay overridable asks.
     attacker_driven = external_prov and (
         sensitivity in _HOT_SENSITIVITY or coding_action in _HOT_CODING_ACTION
     )
@@ -170,22 +197,12 @@ class Daemon:
         if feats is not None:
             return feats
         event, session = event_and_session_from_payload(payload)
-        return {**extract_features(event, session), **extract_safety(event, session)}
-
-    def _enforcement_view(self, payload: dict[str, Any], base: dict[str, str]) -> dict[str, str]:
-        """`base` (the engine-facing features) merged with the M1 coding-threat
-        features `_block_category` consults (M3). The engine never sees these — only
-        the hard-vs-overridable LABEL does. Best-effort: if the payload was a pre-
-        extracted features dict (no raw event) or extraction raises, fall back to
-        `base` (the pre-M3 split), never breaking the already-computed decision."""
-        if payload.get("features") is not None:
-            return base
-        try:
-            event, session = event_and_session_from_payload(payload)
-            return {**base, **extract_enforcement(event, session)}
-        except Exception as err:  # noqa: BLE001 — enforcement view must never break a decision
-            self.logline(f"credence-governor: enforcement view failed (non-fatal): {err}")
-            return base
+        # extract_harm is the conditioned harm 7-tuple (coding-threat features merged
+        # with the shipped safety signals) — the SAME projection build_harm_brain trains
+        # on (train==runtime). It also carries everything `_block_category` reads, so the
+        # hard-vs-overridable LABEL needs no separate enforcement pass (M4 absorbed M3's
+        # `_enforcement_view`): one extraction feeds the posterior AND the label.
+        return {**extract_features(event, session), **extract_harm(event, session)}
 
     # ── SSE ──
     def _emit(self, signal: dict[str, Any]) -> None:
@@ -227,7 +244,7 @@ class Daemon:
                 self.capture.append(event_id, payload)
             except Exception as err:  # noqa: BLE001 — telemetry must never break a decision
                 self.logline(f"credence-governor: raw capture failed (non-fatal): {err}")
-        category = _block_category(self._enforcement_view(payload, features))
+        category = _block_category(features)
         return {"action": action, "features": features, "event_id": event_id, "category": category}
 
     # ── explicit human feedback (Claude Code has no onResolution; close the loop here) ──
