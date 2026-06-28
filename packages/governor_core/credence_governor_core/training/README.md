@@ -84,3 +84,25 @@ these structural features fire with high precision but **near-zero recall on
 ATBench** (an assistant-attack corpus has few coding-structural threats) — so the
 attack side must come from a declared coding red-team corpus (the next arc's M2),
 not ATBench.
+
+### M2 — the declared coding red-team corpus
+
+`red_team.py` is the attack-side twin of `fp_eval.py`: 20 curated, re-extractable
+coding attacks across the §2 threat taxonomy (exfiltration, destructive,
+supply-chain, privilege/persistence, CI/infra, backdoor-logic), including
+injection-triggered variants (the attacker instruction arrives in an untrusted
+`web_fetch` tool_result). `cand_eval` now scores recall against it: each M1
+candidate fires with **precision 1.00 and real recall on the red-team** (vs ~0 on
+ATBench), 0% benign-coding FP; structural signal-recall is **18/18** (the 2
+backdoor-logic cases are the honest content-semantic residual). `red_team_calls()`
+hands the positives to M4's retrain (the n1 side), the twin of
+`benign_coding_calls()`.
+
+**Finding (carried to M4):** the *shipped* hard-deny path is **assistant-tool-
+shaped** — `tainted-external-target` / `cred-exfil-chain` / `external-send` all key
+on a dedicated send TOOL name, but coding exfil routes through `bash`
+(`is_external_send("bash")` is false), so it hard-denies **0%** of these attacks
+even though provenance resolves (`taint-source=web`). Closing it is an M4-coupled
+`_block_category` change (consult `target-sensitivity` / coding egress), not an
+extractor edit (train==runtime with the frozen brain). Pinned by
+`test_red_team.py::test_shipped_hard_deny_is_assistant_shaped_known_gap`.

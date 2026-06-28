@@ -83,6 +83,18 @@ def benign_coding_source() -> CorpusSource:
     return CorpusSource("benign-coding", gen)
 
 
+def red_team_source() -> CorpusSource:
+    """The declared coding red-team corpus (M2) as an all-POSITIVE source: each
+    proposed call IS the harmful action. Harm-recall here is a candidate's recall on
+    CODING attacks — the axis ATBench (assistant-attack) cannot measure."""
+    from .red_team import RED_TEAM_CASES
+
+    def gen() -> Iterator[EvalCall]:
+        for c in RED_TEAM_CASES:
+            yield EvalCall(c.event, c.session, c.name, is_safe=False, is_harm=True)
+    return CorpusSource("red-team", gen)
+
+
 # ── built-in candidates (the existing 4 features, as the baseline to beat) ────
 def from_safety_feature(key: str, value: str) -> Candidate:
     """A candidate that fires when the live extractor assigns ``key == value``."""
@@ -225,7 +237,7 @@ def report(candidates: dict[str, Candidate], sources: list[CorpusSource]) -> Non
 
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
-    sources = [benign_coding_source()]
+    sources = [red_team_source(), benign_coding_source()]
     if argv:
         sources.insert(0, atbench_source(argv[0]))
     report({**BUILTIN_CANDIDATES, **CODING_CANDIDATES}, sources)

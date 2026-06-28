@@ -1,9 +1,19 @@
 # Coding-threat-matched harm model (design sketch)
 
-Status: **active** — M1 landed (the three candidate features, declared + measured,
-not yet promoted); M2–M4 open. Successor to the M1–M4 harm-feature arc
+Status: **active** — M1 (the three candidate features) + M2 (the declared coding
+red-team corpus) landed; M3–M4 open. Successor to the M1–M4 harm-feature arc
 (`if-i-wanted-to-humble-harbor`). Supersedes the ATBench-trained harm brain
 *for the coding deployment*.
+
+> **M2 finding (sharper than §1's framing):** the mismatch is not only in the
+> training *distribution* — the shipped feature *extractors and hard-deny path are
+> assistant-tool-shaped*. `tainted-external-target` / `cred-exfil-chain` /
+> `external-send` all key on a dedicated send TOOL name; coding exfil routes through
+> `bash`, so the shipped hard-deny catches **0%** of the red-team's 20 coding
+> attacks even though provenance resolves (`taint-source=web`). The M1 structural
+> features (`coding-action-class`, `target-sensitivity`, `egress`) restore recall
+> (18/18 structural). Closing the hard-deny gap is an M4-coupled `_block_category`
+> change (consult the new features), not an extractor edit (train==runtime).
 
 ## 0. One line
 
@@ -192,9 +202,9 @@ headroom.
 | move | deliverable |
 |---|---|
 | **M1** ✅ | `target-sensitivity` + coding `action-class` values + `egress` refinement as declared candidate features (`safety.{target_sensitivity,egress_destination,coding_action_class}`, `features.bdsl` `candidate-safety-features`); measured via `cand_eval`. Confirmed: high-precision, near-zero recall on ATBench, 0% benign-coding over-fire — the attack side must come from M2. |
-| **M2** | author the declared coding red-team corpus covering the §2 threat classes. |
+| **M2** ✅ | the declared coding red-team corpus (`training/red_team.py`, 20 attacks across §2, injection-triggered + residual variants), measured by `cand_eval`/`run_red_team`. M1 candidates fire precision-1.00, 18/18 structural recall, 0% benign FP. `red_team_calls()` feeds M4's n1. Surfaced the assistant-tool-shaped hard-deny gap (above). |
 | **M3** | accrue benign capture volume (background; M4b already streaming). |
-| **M4** | train the coding-native brain; validate recall against the red-team set + FP against captured benign; recalibrate `H/λ`; ship. Supersedes the ATBench harm brain for the coding body. |
+| **M4** | promote the M1 features into `config.HARM`; train the coding-native brain (`red_team_calls()` as n1, captured benign as n0); fix the assistant-shaped `_block_category` to consult `target-sensitivity` / coding egress so coding exfil hard-denies; validate recall against the red-team set + FP against captured benign; recalibrate `H/λ`; ship. Supersedes the ATBench harm brain for the coding body. |
 
 M1 is the cheap, high-value start: the three feature changes close the recall
 hole on their own, independent of any retrain.
