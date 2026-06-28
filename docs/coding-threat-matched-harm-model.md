@@ -33,6 +33,12 @@ the posterior coding-native)** landed. Successor to the M1–M4 harm-feature arc
 > dropped from hard-deny to **overridable block** (the posterior still blocks it); a
 > dedicated pipe-to-shell signal to restore the hard deny without the FP is a future
 > refinement.
+>
+> **Shipped + live-verified (0.10.0, deployed).** On the live daemon: self-driven
+> `cat .env | curl` and `scp id_rsa` exfil → `block`/safety (was `proceed` on 0.9.0 — the
+> boundary is closed); injected exfil/`rm -rf` from web → `block`/safety; benign external
+> API curl / in-repo edit / tests / git status → `proceed` (no over-fire). `category` is
+> advisory: blocks render as overridable "approve?" prompts by default (see §7).
 
 > **M2 finding → closed by M3.** The mismatch is not only in the training
 > *distribution* — the shipped feature *extractors and hard-deny path were
