@@ -518,10 +518,14 @@ _CRED_STORE_RE = re.compile(
     r"credentials?(\.json)?\b|(^|/)\.aws/|(^|/)\.npmrc\b|(^|/)\.pypirc\b|\.netrc\b|"
     r"\.git-credentials\b|keychain|(^|/)\.docker/config\.json|secrets?\.(ya?ml|json|env)\b",
     re.I)
+# System/privileged targets. /etc, /usr, /boot, /sys, /sbin are anchored to the
+# filesystem root (^/...) so a benign in-repo dir named etc/ or usr/ stays
+# project-source; .ssh/, shell profiles, sudoers, crontab, systemd units are
+# distinctive enough to match anywhere.
 _SYSTEM_PRIV_RE = re.compile(
-    r"(^|/)\.ssh/|authorized_keys|(^|/)etc/|/sudoers\b|(^|/)\.(bashrc|zshrc|bash_profile|"
-    r"zprofile|profile|bash_login|zshenv)\b|(^|/)cron|crontab|(^|/)\.config/systemd/|"
-    r"/systemd/|\.service\b|(^|/)(usr|boot|sys|sbin)/",
+    r"(^|/)\.ssh/|authorized_keys\b|^/etc/|/sudoers\b|(^|/)\.(bashrc|zshrc|bash_profile|"
+    r"zprofile|profile|bash_login|zshenv)\b|/var/spool/cron|crontab\b|(^|/)\.config/systemd/|"
+    r"/etc/systemd/|\.service\b|^/(usr|boot|sys|sbin)/",
     re.I)
 _PROJECT_CONFIG_RE = re.compile(
     r"\.github/workflows/|(^|/)dockerfile|docker-compose|\.tf\b|\.tfvars\b|(^|/)\.gitlab-ci|"

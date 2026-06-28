@@ -56,6 +56,14 @@ def test_target_sensitivity_project_source_is_benign():
     assert sens("write", {"file_path": "src/bar.py"}) == "project-source"  # relative, own root
 
 
+def test_target_sensitivity_in_repo_etc_dir_is_not_system():
+    # A benign in-repo dir named etc/ or usr/ (a common config convention) must NOT
+    # match the system patterns — those anchor to the filesystem root (^/etc/, ^/usr/).
+    assert sens("edit", {"file_path": _ROOT + "/etc/config.yml"}) == "project-source"
+    assert sens("edit", {"file_path": _ROOT + "/usr/share/x.py"}) == "project-source"
+    assert sens("write", {"file_path": "etc/local.conf"}) == "project-source"
+
+
 def test_target_sensitivity_external_and_none():
     assert sens("write", {"file_path": "/tmp/scratch.txt"}) == "external-unknown"
     assert sens("bash", {"command": "ls"}) == "none"          # no target
