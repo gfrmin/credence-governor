@@ -1,7 +1,8 @@
 # Coding-threat-matched harm model (design sketch)
 
-Status: **design sketch** — not yet scheduled. Successor to the M1–M4 harm-feature
-arc (`if-i-wanted-to-humble-harbor`). Supersedes the ATBench-trained harm brain
+Status: **active** — M1 landed (the three candidate features, declared + measured,
+not yet promoted); M2–M4 open. Successor to the M1–M4 harm-feature arc
+(`if-i-wanted-to-humble-harbor`). Supersedes the ATBench-trained harm brain
 *for the coding deployment*.
 
 ## 0. One line
@@ -190,7 +191,7 @@ headroom.
 
 | move | deliverable |
 |---|---|
-| **M1** | `target-sensitivity` + coding `action-class` values + `egress` refinement as declared features; validate extraction on existing data (self-contained, testable against the current corpus). |
+| **M1** ✅ | `target-sensitivity` + coding `action-class` values + `egress` refinement as declared candidate features (`safety.{target_sensitivity,egress_destination,coding_action_class}`, `features.bdsl` `candidate-safety-features`); measured via `cand_eval`. Confirmed: high-precision, near-zero recall on ATBench, 0% benign-coding over-fire — the attack side must come from M2. |
 | **M2** | author the declared coding red-team corpus covering the §2 threat classes. |
 | **M3** | accrue benign capture volume (background; M4b already streaming). |
 | **M4** | train the coding-native brain; validate recall against the red-team set + FP against captured benign; recalibrate `H/λ`; ship. Supersedes the ATBench harm brain for the coding body. |
