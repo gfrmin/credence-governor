@@ -37,8 +37,15 @@ test("unknown effector → undefined (fail-open)", () => {
   assert.equal(mapSignal(sig("substitute"), "evt_1", fakeClient([]), 1000), undefined);
 });
 
-test("block signal → {block:true, blockReason carrying the reason}", () => {
+test("block signal (default) → OVERRIDABLE requireApproval carrying the reason", () => {
   const r = mapSignal(sig("block", { reason: "runaway loop" }), "evt_1", fakeClient([]), 1000);
+  assert.ok(r?.requireApproval, "a block is overridable by default (the human decides)");
+  assert.match(r?.requireApproval?.description ?? "", /runaway loop/);
+  assert.equal(r?.block, undefined);
+});
+
+test("block signal with hardBlock=true → non-overridable {block:true, blockReason}", () => {
+  const r = mapSignal(sig("block", { reason: "runaway loop" }), "evt_1", fakeClient([]), 1000, true);
   assert.equal(r?.block, true);
   assert.match(r?.blockReason ?? "", /runaway loop/);
 });

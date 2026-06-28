@@ -38,6 +38,14 @@ def _shadow() -> bool:
     return os.environ.get("CREDENCE_GOVERNOR_SHADOW", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _deny_categories() -> frozenset[str]:
+    """Advisory categories the operator opted into HARD (non-overridable) enforcement,
+    from CREDENCE_GOVERNOR_DENY_CATEGORIES (comma-separated, e.g. `safety` or `safety,waste`).
+    Default empty => every gated decision is an overridable ask (the human is the authority)."""
+    raw = os.environ.get("CREDENCE_GOVERNOR_DENY_CATEGORIES", "")
+    return frozenset(c.strip() for c in raw.split(",") if c.strip())
+
+
 def _read_stdin() -> dict[str, Any]:
     raw = sys.stdin.read()
     return json.loads(raw) if raw and raw.strip() else {}
@@ -54,11 +62,12 @@ def handle(hook_input: dict[str, Any]) -> dict[str, Any] | None:
         payload["profile"] = profile
     result = client.decide(payload)
     action = str(result.get("action") or "proceed")
-    category = result.get("category")  # safety|waste — a waste block is overridable
-    _debug(f"{payload['tool_name']} -> {action}/{category} ({result.get('features')})")
+    category = result.get("category")  # safety|waste — ADVISORY; overridability is policy
+    deny = _deny_categories()          # default empty => every gated decision is overridable
+    _debug(f"{payload['tool_name']} -> {action}/{category} deny={set(deny) or '∅'} ({result.get('features')})")
     if _shadow():
-        return effectors.shadow_output(action, payload["tool_name"], category)
-    return effectors.pretooluse_output(action, payload["tool_name"], category)
+        return effectors.shadow_output(action, payload["tool_name"], category, deny)
+    return effectors.pretooluse_output(action, payload["tool_name"], category, deny)
 
 
 def main() -> int:

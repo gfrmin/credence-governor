@@ -37,11 +37,16 @@ Claude Code  ──PreToolUse JSON on stdin──▶  credence-governor-claude-c
 | governor action | Claude Code decision | effect |
 |---|---|---|
 | `proceed` | *(nothing emitted)* | defer to Claude Code's own permission rules |
-| `block`   | `deny` + reason | refuse regardless of native rules |
+| `block`   | `ask` + reason *(default)* | overridable — surface the risk; **you** approve or decline |
 | `ask`     | `ask` + reason | force a user prompt even if native rules would auto-allow |
 
-`permissionDecision: "allow"` is **never** emitted — that would bypass Claude Code's
-own safety prompts. The governor can only *add* friction, not remove it.
+**Overridability is policy, default all-overridable.** By default every gated decision
+is an overridable `ask` — the governor *surfaces* risk to you (the operator is the final
+authority), it never hard-refuses on its own. The decision's advisory `category`
+(`safety` taint/exfil/destructive · `waste` loop/low-value) always shapes the message; to
+make a category a **non-overridable `deny`**, opt in with `CREDENCE_GOVERNOR_DENY_CATEGORIES`
+(e.g. `safety`). `permissionDecision: "allow"` is **never** emitted — the governor can only
+*add* friction, not remove it.
 
 **Fail-open is absolute.** A malformed event, a daemon that is down, a timeout, or any
 error prints nothing and exits 0 — the call proceeds through Claude Code's normal
@@ -159,6 +164,7 @@ is needed only for the daemon and the parity test. Static config example:
 | `CREDENCE_GOVERNOR_PROFILE` | *(none)* | utility profile passed to the daemon (e.g. `flow-guard`) |
 | `CREDENCE_GOVERNOR_DEBUG` | *(off)* | log decisions/failures to stderr |
 | `CREDENCE_GOVERNOR_SHADOW` | *(off)* | truthy → **observe-only**: the daemon still decides and logs, but the hook never enforces (block/ask become a `systemMessage` saying what it *would* do). The safe way to run while beliefs are still being calibrated; parity with the OpenClaw adapter's `shadowMode`. |
+| `CREDENCE_GOVERNOR_DENY_CATEGORIES` | *(none → all overridable)* | comma-separated advisory categories (`safety`, `waste`) to enforce as **non-overridable `deny`** instead of an overridable ask. Default empty: every gated decision is overridable (you are the authority). Set `safety` for hard refusal of taint/exfil/destructive. |
 | `CREDENCE_GOVERNOR_AUTOSTART` | *(off)* | truthy → the SessionStart hook auto-starts the daemon (detached) if it's down |
 | `CREDENCE_GOVERNOR_AUTOSTART_WAIT` | `8.0` | post-autostart `/ready` poll budget (s) before reporting STARTING |
 | `CREDENCE_GOVERNOR_READY_TIMEOUT` | `1.5` | SessionStart `/ready` probe timeout (s) |

@@ -40,6 +40,11 @@
         "description": "Observe-only: the brain still decides and the daemon logs the decision, but the body never enforces (always proceeds / never overrides the model). Use to measure what governance and routing WOULD do on real usage without affecting runs.",
         "default": false
       },
+      "hardBlock": {
+        "type": "boolean",
+        "description": "Overridability policy. Default false: a `block` is surfaced as an OVERRIDABLE approval (the human is the final authority — the governor adds friction, never an un-overridable refusal). Set true for strict enforcement: blocks become non-overridable denials.",
+        "default": false
+      },
       "routing": {
         "type": "boolean",
         "description": "EU-max model routing via before_model_resolve — picks the cheapest model whose expected accuracy justifies it under the active profile, and learns from outcomes. On by default; needs ≥2 priceable models to activate (single-model installs are a silent no-op). Fails open (daemon down / undiscoverable roster => OpenClaw keeps its configured model). Set false to disable.",

@@ -12,8 +12,12 @@ function, your cost/quality trade-off.
 | brain effector | OpenClaw result |
 |---|---|
 | `proceed` | allow |
-| `block`   | `{ block: true, blockReason }` |
+| `block`   | `{ requireApproval }` *(default — overridable)*; `{ block: true }` when `hardBlock` is set |
 | `ask`     | `{ requireApproval }` — OpenClaw's native approval dialog; the user's choice is posted back so the brain learns |
+
+By default a `block` is **overridable** — surfaced for the human to resolve, exactly like
+`ask` (the operator is the final authority). Set `hardBlock: true` for strict,
+non-overridable refusal.
 
 It also logs tool **outcomes** (`after_tool_call`) and reconstructs
 **per-turn cost** (`llm_output` token counts × a price table) so the
@@ -81,6 +85,7 @@ interception point is an OpenClaw **plugin** `before_tool_call` hook.
 | `approvalTimeoutMs` | `120000` | how long OpenClaw waits for the user on an `ask` before denying |
 | `redactToolInputs` | `false` | omit tool-call inputs from sensor events (they can carry secrets); ask-preview becomes generic |
 | `shadowMode` | `false` | observe-only: brain decides + daemon logs, body never enforces or overrides the model |
+| `hardBlock` | `false` | overridability policy. Default: a `block` is an overridable approval (you decide). `true` ⇒ blocks are non-overridable refusals (strict enforcement) |
 | `routing` | `true` | EU-max **model routing** via `before_model_resolve` — ON by default, roster-aware (see below); set `false` to disable |
 | `silent` | `false` | suppress info/warn logs |
 | `pricing` | — | per-model USD/Mtok overrides: `{ "<model>": { "input": n, "output": n, "cacheRead": n, "cacheWrite": n } }` |
