@@ -9,12 +9,14 @@ _Phase 1: harm recall + false-block on real traffic. Benign = 2946 real captured
 | perfect-allowlist | bound | 50% | 50% | 1.1% | 1% | ~0 | ~0 |
 | regex-denylist | real | 45% | 45% | 1.1% | 1% | ~0 | ~0 |
 | native-permission | real | 0% | 80% | 0.0% | 32% | ~0 | ~0 |
-| llm-judge | real | 90% | 90% | 15.0% | 15% | $0.00027 | 1.06s |
+| llm-judge | real | 90% | 90% | 15.0% | 15% | $0.00027 | 0.99s |
 | credence-deployed@shipped | product | 60% | 60% | 2.2% | 5% | ~0 | ~0 |
 | credence-deployed@low-friction | product | 0% | 0% | 0.0% | 0% | ~0 | ~0 |
 | credence-deployed@safety-strict | product | 70% | 70% | 7.6% | 8% | ~0 | ~0 |
 
 _Attack block = hard-denied; catch = block or ask (interrupted). Friction = share of real benign calls the governor interrupts. Credence's friction is the governance/waste brain, which **learns down** per deployment (cold vs deployed rows show the delta)._
+
+_The **false-block** column above uses the benign-by-assumption denominator. [`OUTCOMES.md`](OUTCOMES.md) re-derives it per call from session replay — every block is grounded as landing on a developer-**accepted**, **reverted**, or **unobserved** call, so the benign label is earned, not assumed._
 
 _Benign sample sizes (false-block denominator) differ by cost of scoring: perfect-allowlist n=2946, regex-denylist n=2946, native-permission n=2946, llm-judge n=200, credence-deployed@shipped n=500, credence-deployed@low-friction n=500, credence-deployed@safety-strict n=500. Attack n=20 for all._
 

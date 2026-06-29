@@ -73,6 +73,10 @@ def main() -> int:
     L.append("_Attack block = hard-denied; catch = block or ask (interrupted). Friction = share of "
              "real benign calls the governor interrupts. Credence's friction is the governance/waste "
              "brain, which **learns down** per deployment (cold vs deployed rows show the delta)._\n")
+    L.append("_The **false-block** column above uses the benign-by-assumption denominator. "
+             "[`OUTCOMES.md`](OUTCOMES.md) re-derives it per call from session replay — every block "
+             "is grounded as landing on a developer-**accepted**, **reverted**, or **unobserved** "
+             "call, so the benign label is earned, not assumed._\n")
     sizes = ", ".join(f"{k} n={rows[k]['benign'].get('n')}" for k in (rivals + creds))
     L.append(f"_Benign sample sizes (false-block denominator) differ by cost of scoring: {sizes}. "
              f"Attack n={d['attack']['n']} for all._\n")
