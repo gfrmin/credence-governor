@@ -1,0 +1,5 @@
+# regenerable intermediates (produced by the §7 cadence; not source)
+routing_results.json
+harm_results.json
+loss_triage.json
+__pycache__/
