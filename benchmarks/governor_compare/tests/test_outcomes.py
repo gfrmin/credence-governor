@@ -90,6 +90,43 @@ def test_ground_returns_requested_cids(tmp_path):
     assert g["cap-0"].label == "accepted" and g["cap-3"].label == "reverted"
 
 
+# S4 — a burst: two parallel Bash calls issued from the SAME snapshot (identical prefix_len),
+# then a Read. Each must be located at its OWN position, not collapsed onto the first.
+M4 = [
+    _msg("user", timestamp="T4-0"),
+    _msg("assistant", timestamp="T4-1"),
+    _msg("tool_call", tool_name="Bash", input={"command": "echo a"}, timestamp="T4-2"),
+    _msg("tool_result", result="a", timestamp="T4-3"),
+    _msg("tool_call", tool_name="Bash", input={"command": "echo b"}, timestamp="T4-4"),
+    _msg("tool_result", result="b", timestamp="T4-5"),
+    _msg("assistant", timestamp="T4-6"),
+    _msg("tool_call", tool_name="Read", input={"file_path": "x"}, timestamp="T4-7"),
+    _msg("tool_result", result="x", timestamp="T4-8"),
+]
+
+
+def _burst_capture(tmp_path):
+    recs = [
+        _rec("a0", "Bash", {"command": "echo a"}, "p4", M4[:2]),       # idx0  burst call A
+        _rec("a1", "Bash", {"command": "echo b"}, "p4", M4[:2]),       # idx1  burst call B (SAME prefix_len)
+        _rec("a2", "Bash", {"command": "echo NEVER"}, "p4", M4[:2]),   # idx2  not in transcript → ambiguous
+        _rec("a3", "Read", {"file_path": "x"}, "p4", M4),              # idx3  final (longest) snapshot
+    ]
+    p = tmp_path / "burst.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in recs) + "\n")
+    return str(p)
+
+
+def test_burst_calls_located_individually(tmp_path):
+    si = O.SessionIndex.build(_burst_capture(tmp_path))
+    a, b, never = si.classify(0), si.classify(1), si.classify(2)
+    # both real burst calls are accepted, but located at DIFFERENT positions (A before B)
+    assert a.label == "accepted" and b.label == "accepted"
+    assert a.n_after > b.n_after            # A sits earlier in the burst than B → not collapsed
+    # a call whose exact input never appears must be ambiguous, NOT accepted off the first tool_call
+    assert never.label == "ambiguous" and "not located" in never.reason
+
+
 def test_revert_detector_precision():
     src = {"file_path": "/p/src/a.py", "content": "x"}
     # genuine reverts of the exact target

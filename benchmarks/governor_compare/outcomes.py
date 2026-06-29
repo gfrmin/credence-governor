@@ -23,6 +23,11 @@ LONGEST snapshot per session is the full transcript. We read the RAW capture (no
 load_capture, whose Session projection drops result content) but apply load_capture's
 EXACT filters (skip truncated, dedup event_id, first wins) so indices align with the
 `cap-{i}` ids the rest of the benchmark uses.
+
+A call is located in the full transcript by matching its (tool_name, input), NOT by
+position: parallel/bursted tool calls all share one pre-execution snapshot (identical
+prefix length), so a positional match would collapse a whole burst onto its first call.
+A call we cannot place in any later snapshot is unobserved → ambiguous, never accepted.
 """
 
 from __future__ import annotations
@@ -72,14 +77,22 @@ def _raw_records(path: str) -> Iterator[tuple[int, dict]]:
             i += 1
 
 
-def _session_key(rec: dict) -> tuple[str, str]:
-    """(project_root, first-message timestamp) — stable per session; growing snapshots
-    of one session share it. Records with no timestamped first message become singletons."""
+def _session_key(rec: dict, idx: int) -> tuple[str, str]:
+    """(project_root, first-message timestamp) — stable per session; growing snapshots of
+    one session share it (the first message is identical across a session's snapshots). A
+    record whose first message has NO timestamp (synthetic / pre-existing) gets a unique
+    per-record key so it becomes a genuine singleton, rather than colliding with every other
+    untimestamped record in the same project onto one bogus shared transcript."""
     sess = rec.get("session") or {}
     msgs = sess.get("messages") or []
     root = sess.get("project_root") or sess.get("projectRoot") or ""
     ts0 = msgs[0].get("timestamp") if msgs else None
-    return (root, ts0 or "")
+    return (root, ts0) if ts0 else (root, f"__singleton-{idx}")
+
+
+def _canon(inp: Any) -> str:
+    """Stable serialization of a tool-call input, for locating a specific call in a transcript."""
+    return json.dumps(inp, sort_keys=True, default=str)
 
 
 # ── structural signal helpers ─────────────────────────────────────────────────
@@ -129,10 +142,6 @@ def _is_revert_of(later_call: dict, orig_input: Any) -> bool:
     return bool(_GIT_RESTORE.search(cmd) or re.search(r"\brm\b[^&|;]*" + re.escape(target), cmd))
 
 
-def _first_tool_call(msgs: list[dict], start: int) -> int | None:
-    return next((k for k in range(start, len(msgs)) if msgs[k].get("role") == "tool_call"), None)
-
-
 # ── the grounding engine ──────────────────────────────────────────────────────
 @dataclass
 class SessionIndex:
@@ -151,7 +160,7 @@ class SessionIndex:
         for i, rec in _raw_records(path):
             sess = rec.get("session") or {}
             msgs = sess.get("messages") or []
-            key = _session_key(rec)
+            key = _session_key(rec, i)
             si.calls[i] = {"key": key, "prefix_len": len(msgs),
                            "event": {"tool_name": rec.get("tool_name") or rec.get("toolName") or "",
                                      "input": rec.get("input")}}
@@ -171,13 +180,19 @@ class SessionIndex:
         if len(final) <= prefix_len:
             return Outcome(cid, "ambiguous", "unobserved-tail (call at/near session end)")
         tail = final[prefix_len:]
-        pos_rel = _first_tool_call(tail, 0)
+        # Locate THIS specific call by (tool_name, input) — NOT merely the first tool_call after
+        # the prefix. Parallel/bursted calls share ONE pre-execution snapshot (identical
+        # prefix_len), so first-tool-call alignment collapses a whole burst onto its first call.
+        # If the exact call cannot be placed in a later snapshot, its fate is unobserved and we
+        # must NOT credit it as accepted.
+        want = _canon(event["input"])
+        pos_rel = next((k for k, m in enumerate(tail)
+                        if m.get("role") == "tool_call"
+                        and m.get("tool_name") == event["tool_name"]
+                        and _canon(m.get("input")) == want), None)
         if pos_rel is None:
-            return Outcome(cid, "ambiguous", "call not replayed in later snapshot")
-        exec_call = tail[pos_rel]
-        executed = exec_call.get("tool_name") == event["tool_name"]
+            return Outcome(cid, "ambiguous", "call not located in any later snapshot (unobserved)")
         after = tail[pos_rel + 1:]
-        # result = first tool_result after the executed call
         result = next((m.get("result") for m in after if m.get("role") == "tool_result"), None)
         errored = _is_error(result)
         later_calls = [m for m in after if m.get("role") == "tool_call"]
@@ -185,13 +200,13 @@ class SessionIndex:
         reverted = any(_is_revert_of(m, event["input"]) for m in later_calls[:12])
         n_after = len(after)
         if reverted:
-            return Outcome(cid, "reverted", "later action undid this call (git restore/rm of its target)",
-                           executed=executed, errored=errored, continued=continued, n_after=n_after)
+            return Outcome(cid, "reverted", "located, then a later action undid it (git restore/rm of its target)",
+                           executed=True, errored=errored, continued=continued, n_after=n_after)
         if continued:
-            return Outcome(cid, "accepted", "session continued working past it without undoing it",
-                           executed=executed, errored=errored, continued=True, n_after=n_after)
-        return Outcome(cid, "ambiguous", "no follow-on action observed",
-                       executed=executed, errored=errored, n_after=n_after)
+            return Outcome(cid, "accepted", "located running; the session continued past it without undoing it",
+                           executed=True, errored=errored, continued=True, n_after=n_after)
+        return Outcome(cid, "ambiguous", "located, but no follow-on action after it (outcome unobserved)",
+                       executed=True, errored=errored, n_after=n_after)
 
     def ground(self, cids: list[str] | None = None) -> dict[str, Outcome]:
         """Ground a set of cids (default: every captured call)."""

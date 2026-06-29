@@ -79,46 +79,57 @@ def main() -> int:
     rows = res.get("governors", {})
 
     L.append("## Outcome-grounded false-block (per governor)\n")
-    L.append("| Governor | Hard-blocks | on accepted (true FP) | on reverted (good block) | "
-             "on ambiguous | assumed FP-rate | **grounded FP-rate** |")
+    L.append("| Governor | Blocks | on accepted (true FP) | on reverted (good block) | "
+             "on ambiguous (set aside) | assumed FP-rate | **grounded FP-rate** |")
     L.append("|---|---|---|---|---|---|---|")
+    gfp: dict[str, float] = {}
     for name, row in rows.items():
+        b = row.get("benign", {})
         bcids = _blocked_cids(row)
-        if not bcids and row.get("benign", {}).get("blocked_cids") is None \
-                and not row.get("benign", {}).get("fp_examples"):
+        if not bcids and b.get("blocked_cids") is None and not b.get("fp_examples"):
             continue  # nothing hard-blocked (e.g. native-permission only asks)
-        scope_n = row.get("benign", {}).get("n") or n
-        scope = {f"cap-{i}" for i in range(scope_n)}            # the calls this governor scored
+        scored = b.get("scored_cids")                          # the EXACT calls this governor scored…
+        scope = set(scored) if scored else {f"cap-{i}" for i in range(b.get("n") or n)}  # …(sample may be random)
         acc_scope = sum(1 for c in scope if label.get(c) == "accepted")
-        c = Counter(label.get(b, "ambiguous") for b in bcids)
+        c = Counter(label.get(x, "ambiguous") for x in bcids)
         on_acc, on_rev, on_amb = c.get("accepted", 0), c.get("reverted", 0), c.get("ambiguous", 0)
-        assumed = row.get("benign", {}).get("false_block_rate")
-        grounded_fp = on_acc / acc_scope if acc_scope else None
-        partial = "" if row.get("benign", {}).get("blocked_cids") is not None else " ⚠︎"
+        assumed = b.get("false_block_rate")
+        grounded = on_acc / acc_scope if acc_scope else None
+        if grounded is not None:
+            gfp[name] = grounded
+        partial = "" if b.get("blocked_cids") is not None else " ⚠︎"
         L.append(f"| {name}{partial} | {len(bcids)} | {on_acc} | {on_rev} | {on_amb} "
                  f"| {'—' if assumed is None else f'{assumed*100:.1f}%'} "
-                 f"| {'—' if grounded_fp is None else f'{grounded_fp*100:.1f}%'} |")
+                 f"| {'—' if grounded is None else f'{grounded*100:.1f}%'} |")
     L.append("")
-    L.append("_**grounded FP-rate** = hard-blocks landing on a behaviourally-confirmed-accepted call, "
-             "over the accepted calls in that governor's scored scope. Rows marked ⚠︎ lack a full "
-             "`blocked_cids` list (older run) — counts are from the capped fp_examples and undercount; "
-             "re-run `compare.py` to refresh. Blocks on reverted/ambiguous calls are NOT counted as "
-             "false-blocks: the developer either undid them or we never saw the outcome._\n")
+    L.append(f"_**grounded FP-rate** = blocks landing on a behaviourally-confirmed-**accepted** call, over "
+             f"the accepted calls in that governor's scored scope ({n_acc}/{n} = {n_acc/n:.0%} of the corpus "
+             "is confirmed accepted; the unobserved-tail rest is set aside). 'Blocks' counts every hard "
+             "interruption; for **Credence** most are **overridable** (the dev can proceed), not hard "
+             "denials — see `COMPARISON.md` for the hard-deny split. Blocks on ambiguous/reverted calls are "
+             "NOT counted as false-blocks. Rows marked ⚠︎ lack a full `blocked_cids` list (older run)._\n")
 
-    # A few worked examples — accepted calls a governor blocked (the defensible FP), and any reverted.
     L.append("## Reading\n")
-    L.append("- **What grounding revealed:** every Credence and LLM-judge hard-block landed on a "
-             "confirmed-**accepted** call — their false-block rates are fully *earned*, not artifacts of "
-             "the benign assumption (the LLM-judge simply over-blocks far more real work). Some rule-guard "
-             "blocks instead hit **ambiguous** (unobserved-tail) calls, so their grounded rate dips below "
-             "the assumed one. Grounding does not flatter the product; it makes every number defensible.\n")
-    L.append("- The benign label is now **earned per call**, not assumed: a false-block must land on a "
-             "call the developer demonstrably kept. This is the number a buyer cannot wave away.\n"
-             "- Structural-only grounding is conservative: it never reads user text (the capture strips "
-             "it), so it can confirm acceptance and explicit reverts but leaves genuinely unobserved "
-             "tails as ambiguous rather than guessing.\n"
-             "- Next rigor layer: an LLM-adjudicator on just the ambiguous blocks (with full session "
-             "context), and a human spot-check of any accepted↔reverted disagreement.")
+    judge, cred = gfp.get("llm-judge"), gfp.get("credence-deployed@shipped")
+    if judge and cred and cred > 0:
+        L.append(f"- **What grounding revealed:** on behaviourally-confirmed-accepted developer work the "
+                 f"LLM-judge's grounded false-block ({judge*100:.1f}%) is ~{round(judge/cred)}× "
+                 f"Credence@shipped's ({cred*100:.1f}%). Grounding does **not** flatter the product — blocks "
+                 "that hit unobserved-tail calls are reclassified as ambiguous (set aside), never counted "
+                 "for or against a governor.\n")
+    unobs = n - n_acc - dist.get("reverted", 0)
+    L.append(f"- The benign label is now **earned per call**, not assumed: a false-block must land on a call "
+             f"the developer demonstrably kept (located running, session continued). Only {n_acc/n:.0%} of "
+             f"calls clear that bar; the {unobs} unobserved-tail calls are set aside, not assumed benign.\n"
+             "- Structural-only grounding is conservative: it never reads user text (the capture strips it), "
+             "so a call it cannot place in a later snapshot is ambiguous, not accepted.\n"
+             "- **Caveat (corpus hygiene):** the capture includes the agent's own development OF this safety "
+             "system — synthetic attack payloads (`.env`-exfil, `rm -rf` strings) authored as test fixtures "
+             "appear as benign calls and trip the guards, inflating EVERY governor's false-block (a caveat "
+             "*against the rivals*, not Credence). The `reverted` bucket is currently empty on this corpus "
+             "(no explicit git-restore/rm of an agent-written file was observed).\n"
+             "- Next rigor layer: an LLM-adjudicator on just the ambiguous blocks (full session context), "
+             "plus a human spot-check.")
 
     with open(OUT, "w") as f:
         f.write("\n".join(L) + "\n")

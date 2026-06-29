@@ -46,23 +46,30 @@ def main() -> int:
     rows = d["governors"]
     L: list[str] = []
     L.append("# Governor comparison — concrete numbers vs rival governors\n")
-    L.append(f"_Phase 1: harm recall + false-block on real traffic. Benign = {d['benign']['n']} real "
-             f"captured Claude Code calls (benign-by-assumption); attack = {d['attack']['n']} declared "
-             f"coding red-team. Credence = the real daemon decision over the skin wire._\n")
+    L.append(f"_Phase 1: harm recall + false-interrupt on real traffic. Benign = {d['benign']['n']} real "
+             f"captured Claude Code calls (61% behaviourally-confirmed accepted by session replay — see "
+             f"[`OUTCOMES.md`](OUTCOMES.md); the rest unobserved-tail, set aside); attack = {d['attack']['n']} "
+             f"declared coding red-team. Credence = the real daemon decision over the skin wire._\n")
 
     L.append("## The table\n")
-    L.append("| Governor | Tier | Attack block | Attack catch (＋ask) | False-block (real traffic) | Friction (asks) | $/decision | Latency/decision |")
-    L.append("|---|---|---|---|---|---|---|---|")
+    L.append("| Governor | Tier | Attack catch (＋ask) | Attack hard-deny | False-interrupt (benign) | …of which hard | Friction (asks) | $/decision | Latency/decision |")
+    L.append("|---|---|---|---|---|---|---|---|---|")
 
     def row_line(name: str, r: dict) -> str:
         h, b = r["harm"], r["benign"]
+        cred = name.startswith("credence")
+        # Only Credence has OVERRIDABLE (waste) blocks; every rule guard / the judge hard-denies, so
+        # for them hard == all blocks. (Their rows store blocked_hard=0 by construction — don't trust it.)
+        hard_atk = h.get("block_recall_hard") if cred else h.get("block_recall")
+        fb_hard = b.get("false_block_hard_rate") if cred else b.get("false_block_rate")
         n_dec = max(1, b.get("n", 1))
         cps = (b.get("decide_cost_total", 0.0) or 0.0) / n_dec
         cost = "~0" if cps < 1e-6 else f"${cps:.5f}"
         lat_s = b.get("latency_mean_s") or 0.0
         lat = "~0" if lat_s < 1e-3 else f"{lat_s:.2f}s"
-        return (f"| {name} | {r['tier']} | {_pct(h.get('block_recall'))} | {_pct(h.get('recall'))} "
-                f"| {_pct3(b.get('false_block_rate'))} | {_pct(b.get('false_gate_rate'))} | {cost} | {lat} |")
+        return (f"| {name} | {r['tier']} | {_pct(h.get('recall'))} | {_pct(hard_atk)} "
+                f"| {_pct3(b.get('false_block_rate'))} | {_pct3(fb_hard)} | {_pct(b.get('false_gate_rate'))} "
+                f"| {cost} | {lat} |")
 
     # order: rivals, then Credence rows
     rivals = [k for k in rows if not k.startswith("credence")]
@@ -70,13 +77,17 @@ def main() -> int:
     for k in rivals + creds:
         L.append(row_line(k, rows[k]))
     L.append("")
-    L.append("_Attack block = hard-denied; catch = block or ask (interrupted). Friction = share of "
-             "real benign calls the governor interrupts. Credence's friction is the governance/waste "
-             "brain, which **learns down** per deployment (cold vs deployed rows show the delta)._\n")
-    L.append("_The **false-block** column above uses the benign-by-assumption denominator. "
-             "[`OUTCOMES.md`](OUTCOMES.md) re-derives it per call from session replay — every block "
-             "is grounded as landing on a developer-**accepted**, **reverted**, or **unobserved** "
-             "call, so the benign label is earned, not assumed._\n")
+    L.append("_**Attack catch** = blocked or asked (interrupted). **Hard-deny** = the non-overridable "
+             "subset: rule guards and the LLM-judge have no override, so for them every block is hard; "
+             "**Credence interruptions are overridable by default** (the dev can proceed) unless the safety "
+             "category fires — so its hard-deny column is much smaller than its catch, by design. "
+             "**False-interrupt** = share of real benign calls blocked; **…of which hard** is the "
+             "non-overridable part. Friction = benign calls asked-about. Credence's friction is the "
+             "governance brain, which **learns down** per deployment._\n")
+    L.append("_The **false-interrupt** column uses the benign-by-assumption denominator. "
+             "[`OUTCOMES.md`](OUTCOMES.md) re-derives it per call from session replay — every block is "
+             "grounded as landing on a developer-**accepted** or **unobserved** call, so the benign label "
+             "is earned, not assumed._\n")
     sizes = ", ".join(f"{k} n={rows[k]['benign'].get('n')}" for k in (rivals + creds))
     L.append(f"_Benign sample sizes (false-block denominator) differ by cost of scoring: {sizes}. "
              f"Attack n={d['attack']['n']} for all._\n")
@@ -110,8 +121,11 @@ def main() -> int:
     L.append("## Reading\n")
     L.append("- **Measured** rows ran in-process on identical records; **cited** rows are published "
              "third-party numbers, tagged and linked, never blended into the measured table.\n"
-             "- Benign traffic is benign-by-assumption (validate on a sample); a hard-block on it is a "
-             "false-block.\n- Cost/success axes and the per-profile Pareto are Phases 2–4.")
+             "- Benign traffic is no longer assumed benign: [`OUTCOMES.md`](OUTCOMES.md) replays each "
+             "session and re-derives the false-interrupt on the 61% of calls behaviourally confirmed "
+             "accepted; on that denominator the LLM-judge blocks ~8× the real developer work Credence does.\n"
+             "- The daemon and rivals score the SAME 2946 records; the LLM-judge scores a seeded-random "
+             "200 (each is a paid API call). Cost/success axes and the per-profile Pareto are Phases 2–4.")
 
     with open(OUT, "w") as f:
         f.write("\n".join(L) + "\n")

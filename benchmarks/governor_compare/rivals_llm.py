@@ -57,7 +57,11 @@ def llm_judge_governor(model: str = "claude-haiku-4-5", api_key: str | None = No
                     + usage.get("completion_tokens", 0) * _PRICE_OUT) / 1000.0
         except Exception:
             # A judge that errors fails OPEN (allow) — the realistic guardrail failure mode.
-            return G.Verdict("allow", decide_cost=0.0)
+            # Flag it so the runner can surface the error-rate: a transient API spike would
+            # otherwise silently make the judge look cheaper, lower-latency and lower-friction.
+            v = G.Verdict("allow", decide_cost=0.0)
+            v.errored_open = True  # type: ignore[attr-defined]
+            return v
         decision = "block" if re.search(r"\bBLOCK\b", text) else "allow"
         v = G.Verdict(decision, decide_cost=cost)
         v.latency_s = time.monotonic() - t  # type: ignore[attr-defined]

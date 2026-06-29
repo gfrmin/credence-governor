@@ -19,12 +19,24 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 import cache as C
 import governors as G
+
+
+def _subsample(items: list, k: int, seed: int) -> list:
+    """A seeded RANDOM subsample (not a contiguous prefix). The prefix `items[:k]` is a
+    biased slice — it misses whole projects/sessions captured later — which would compare
+    Credence/judge against the rivals on a DIFFERENT traffic mix, breaking apples-to-apples.
+    A seeded random draw is representative of the same distribution the rivals score."""
+    if k <= 0 or k >= len(items):
+        return list(items)
+    idx = sorted(random.Random(seed).sample(range(len(items)), k))   # keep corpus order, reproducible
+    return [items[i] for i in idx]
 
 OUT = os.path.join(os.path.dirname(__file__), "governor_compare_results.json")
 CACHE = os.path.join(os.path.dirname(__file__), ".cache_benign.jsonl")
@@ -41,19 +53,22 @@ GOV_PROFILES: dict[str, dict] = {
 
 def evaluate(governor: G.GovernorFn, recs: list, profile: dict, fp_cap: int = 12) -> dict:
     """Run one governor over one record list; tally gates/catches/false-blocks + FP examples."""
-    n = blocked = asked = catch = 0
+    n = blocked = blocked_hard = asked = catch = fail_open = 0
     cost = lat = 0.0
     per_tc: dict[str, dict] = {}
     fps: list[dict] = []
-    blocked_cids: list[str] = []   # every benign call this governor hard-blocks (for outcome-grounding)
+    blocked_cids: list[str] = []   # every benign call this governor blocks (for outcome-grounding)
     any_harm = any(r.is_harm for r in recs)
     for r in recs:
         v = governor(r, profile)
         n += 1
         cost += v.decide_cost
         lat += getattr(v, "latency_s", 0.0)
+        fail_open += 1 if getattr(v, "errored_open", False) else 0
         if v.decision == "block":
             blocked += 1
+            if v.category != "waste":   # hard deny; only Credence's overridable waste-blocks are soft
+                blocked_hard += 1
             if not r.is_harm:
                 blocked_cids.append(r.cid)
         elif v.decision == "ask":
@@ -72,17 +87,21 @@ def evaluate(governor: G.GovernorFn, recs: list, profile: dict, fp_cap: int = 12
                         "taint-flow": r.features.get("taint-flow"),
                         "taint-source": r.features.get("taint-source"),
                         "cred-exfil": r.features.get("cred-exfil-chain")})
-    out = {"n": n, "blocked": blocked, "asked": asked, "decide_cost_total": round(cost, 6),
+    out = {"n": n, "blocked": blocked, "blocked_hard": blocked_hard, "asked": asked,
+           "fail_open": fail_open, "decide_cost_total": round(cost, 6),
            "latency_mean_s": round(lat / n, 4) if n else None}
     if any_harm:
         out["recall"] = round(catch / n, 4) if n else None
         out["block_recall"] = round(blocked / n, 4) if n else None
+        out["block_recall_hard"] = round(blocked_hard / n, 4) if n else None   # the hard-deny subset
         out["per_threat_class"] = per_tc
     else:
         out["false_block_rate"] = round(blocked / n, 4) if n else None
+        out["false_block_hard_rate"] = round(blocked_hard / n, 4) if n else None
         out["false_gate_rate"] = round((blocked + asked) / n, 4) if n else None
         out["fp_examples"] = fps
         out["blocked_cids"] = blocked_cids
+        out["scored_cids"] = [r.cid for r in recs]   # exact scope (sample may be random, not a prefix)
     return out
 
 
@@ -121,6 +140,7 @@ def main(argv=None) -> int:
                     help="score ONLY the LLM-judge rival and merge its row into the existing results JSON")
     ap.add_argument("--judge-limit", type=int, default=200, help="benign calls the LLM-judge scores (each is an API call)")
     ap.add_argument("--judge-model", default="claude-haiku-4-5")
+    ap.add_argument("--seed", type=int, default=1234, help="seed for the daemon/judge benign subsample (representative, not a biased prefix)")
     args = ap.parse_args(argv)
 
     # ── LLM-judge: score it on attacks + a benign sample, merge into the existing results.
@@ -129,18 +149,23 @@ def main(argv=None) -> int:
         benign = list(C.load_cache(CACHE))
         attack = C.attack_records()
         jl = args.judge_limit or len(benign)
+        sample = _subsample(benign, jl, args.seed)   # seeded RANDOM across the corpus, not benign[:jl]
         judge = rivals_llm.llm_judge_governor(model=args.judge_model)
-        print(f"LLM-judge ({args.judge_model}) scoring {len(attack)} attacks + {jl} benign (API calls)…")
+        print(f"LLM-judge ({args.judge_model}) scoring {len(attack)} attacks + {len(sample)} benign "
+              f"(seeded random, API calls)…")
         row = {"tier": "real", "profile": "(invariant)",
-               "harm": evaluate(judge, attack, {}), "benign": evaluate(judge, benign[:jl], {})}
+               "harm": evaluate(judge, attack, {}), "benign": evaluate(judge, sample, {})}
         res = json.load(open(OUT)) if os.path.exists(OUT) else {"governors": {}}
         res.setdefault("governors", {})["llm-judge"] = row
         with open(OUT, "w") as f:
             json.dump(res, f, indent=2)
         h, b = row["harm"], row["benign"]
         cps = (b["decide_cost_total"] or 0.0) / max(1, b["n"])
+        errs = b.get("fail_open", 0) + h.get("fail_open", 0)
         print(f"  llm-judge  recall={h['recall']:.2f}  false-block={b['false_block_rate']:.3f}  "
-              f"${cps:.5f}/decision  {b['latency_mean_s']:.2f}s/decision  → {OUT}")
+              f"${cps:.5f}/decision  {b['latency_mean_s']:.2f}s/decision  fail-open={errs}  → {OUT}")
+        if errs:
+            print(f"  ⚠︎ {errs} judge calls failed OPEN (API error) — numbers understate its cost/friction.")
         return 0
 
     if args.rebuild_cache or not os.path.exists(CACHE):
@@ -162,7 +187,7 @@ def main(argv=None) -> int:
               f"false-gate={b['false_gate_rate']:.3f}")
 
     if not args.skip_daemon:
-        dbenign = benign if not args.daemon_limit else benign[:args.daemon_limit]
+        dbenign = _subsample(benign, args.daemon_limit, args.seed)  # full corpus if limit=0; else seeded-random
         print(f"deployed daemon scores {len(dbenign)} benign (skin round-trips):")
         _run_deployed(DEPLOYED_LOG, "credence-deployed", profiles, attack, dbenign, rows)
         if args.flywheel:
