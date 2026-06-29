@@ -1,0 +1,5 @@
+# regenerable intermediates
+governor_compare_results.json
+.cache_benign.jsonl
+.empty-log-never-written.jsonl
+__pycache__/
