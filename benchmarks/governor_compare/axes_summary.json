@@ -1,0 +1,217 @@
+{
+  "phase": "4 \u2014 integrate over buyer profiles: Wald-loss dominance + Pareto across cost/harm/success",
+  "streams": {
+    "benign_n": 2946,
+    "attack_n": 20,
+    "cost_tasks": 164,
+    "cost_seeds": 25
+  },
+  "harm": {
+    "perfect-allowlist": {
+      "recall": 0.5,
+      "hard_deny": 0.5,
+      "interrupt": 0.0105,
+      "hard": 0.0105,
+      "fb_rate": 0.0105,
+      "dec_cost": 0.0,
+      "latency": 0.0,
+      "n": 2946
+    },
+    "regex-denylist": {
+      "recall": 0.45,
+      "hard_deny": 0.45,
+      "interrupt": 0.0115,
+      "hard": 0.0115,
+      "fb_rate": 0.0115,
+      "dec_cost": 0.0,
+      "latency": 0.0,
+      "n": 2946
+    },
+    "native-permission": {
+      "recall": 0.8,
+      "hard_deny": 0.0,
+      "interrupt": 0.3164,
+      "hard": 0.0,
+      "fb_rate": 0.0,
+      "dec_cost": 0.0,
+      "latency": 0.0,
+      "n": 2946
+    },
+    "credence-deployed@shipped": {
+      "recall": 0.6,
+      "hard_deny": 0.25,
+      "interrupt": 0.036,
+      "hard": 0.0088,
+      "fb_rate": 0.0156,
+      "dec_cost": 0.0,
+      "latency": 0.0,
+      "n": 2946
+    },
+    "credence-deployed@low-friction": {
+      "recall": 0.0,
+      "hard_deny": 0.0,
+      "interrupt": 0.0,
+      "hard": 0.0,
+      "fb_rate": 0.0,
+      "dec_cost": 0.0,
+      "latency": 0.0,
+      "n": 2946
+    },
+    "credence-deployed@safety-strict": {
+      "recall": 0.7,
+      "hard_deny": 0.3,
+      "interrupt": 0.0428,
+      "hard": 0.0112,
+      "fb_rate": 0.0428,
+      "dec_cost": 0.0,
+      "latency": 0.0,
+      "n": 2946
+    },
+    "llm-judge": {
+      "recall": 0.9,
+      "hard_deny": 0.9,
+      "interrupt": 0.095,
+      "hard": 0.095,
+      "fb_rate": 0.095,
+      "dec_cost": 0.00026811,
+      "latency": 1.0165,
+      "n": 200
+    }
+  },
+  "success_pinned": {
+    "ungoverned": {
+      "completion_preserved": 1.0,
+      "hard_break_call_rate": 0.0,
+      "soft_gate_call_rate": 0.0,
+      "harm_row": "ungoverned"
+    },
+    "perfect-allowlist": {
+      "completion_preserved": 0.562,
+      "hard_break_call_rate": 0.008,
+      "soft_gate_call_rate": 0.0,
+      "harm_row": "perfect-allowlist"
+    },
+    "regex-denylist": {
+      "completion_preserved": 0.688,
+      "hard_break_call_rate": 0.011,
+      "soft_gate_call_rate": 0.0,
+      "harm_row": "regex-denylist"
+    },
+    "native-permission": {
+      "completion_preserved": 1.0,
+      "hard_break_call_rate": 0.0,
+      "soft_gate_call_rate": 0.4,
+      "harm_row": "native-permission"
+    },
+    "credence-deny-safety": {
+      "completion_preserved": 0.75,
+      "hard_break_call_rate": 0.008,
+      "soft_gate_call_rate": 0.028,
+      "harm_row": "credence-deployed@safety-strict"
+    },
+    "credence-default": {
+      "completion_preserved": 1.0,
+      "hard_break_call_rate": 0.0,
+      "soft_gate_call_rate": 0.036,
+      "harm_row": "credence-deployed@shipped"
+    }
+  },
+  "cost": {
+    "rivals": {
+      "always-haiku": {
+        "pass": 0.9541,
+        "cost": 0.11194,
+        "pass_std": 0.0148,
+        "cost_std": 0.00397
+      },
+      "always-sonnet": {
+        "pass": 0.981,
+        "cost": 0.18418,
+        "pass_std": 0.0125,
+        "cost_std": 0.00785
+      },
+      "always-opus": {
+        "pass": 0.9844,
+        "cost": 0.26237,
+        "pass_std": 0.0106,
+        "cost_std": 0.00861
+      },
+      "clairvoyant (bound)": {
+        "pass": 0.9956,
+        "cost": 0.11329,
+        "pass_std": 0.0059,
+        "cost_std": 0.00413
+      },
+      "frugal-cascade (bound)": {
+        "pass": 0.9956,
+        "cost": 0.12597,
+        "pass_std": 0.0059,
+        "cost_std": 0.00726
+      },
+      "routellm-style": {
+        "pass": 0.9546,
+        "cost": 0.17767,
+        "pass_std": 0.0156,
+        "cost_std": 0.03995
+      },
+      "random": {
+        "pass": 0.9707,
+        "cost": 0.18901,
+        "pass_std": 0.0146,
+        "cost_std": 0.01188
+      }
+    },
+    "credence": {
+      "cost-saver": {
+        "pass": 0.9517,
+        "cost": 0.11588,
+        "pass_std": 0.014,
+        "cost_std": 0.00685,
+        "reward": 0.02
+      },
+      "indie-hacker": {
+        "pass": 0.9517,
+        "cost": 0.11588,
+        "pass_std": 0.014,
+        "cost_std": 0.00685,
+        "reward": 0.02
+      },
+      "balanced": {
+        "pass": 0.9517,
+        "cost": 0.1608,
+        "pass_std": 0.0148,
+        "cost_std": 0.02949,
+        "reward": 1.0
+      },
+      "regulated-enterprise": {
+        "pass": 0.9517,
+        "cost": 0.1608,
+        "pass_std": 0.0148,
+        "cost_std": 0.02949,
+        "reward": 2.0
+      },
+      "quality-first": {
+        "pass": 0.9517,
+        "cost": 0.1608,
+        "pass_std": 0.0148,
+        "cost_std": 0.02949,
+        "reward": 5.0
+      },
+      "fintech-safety": {
+        "pass": 0.9517,
+        "cost": 0.1608,
+        "pass_std": 0.0148,
+        "cost_std": 0.02949,
+        "reward": 5.0
+      }
+    },
+    "n_seeds": 25,
+    "n_tasks": 164
+  },
+  "sources": {
+    "harm": "governor_compare_results.json (Phase 1; == COMPARISON.md) \u2014 measured, real skin",
+    "cost": "cost/cost_results.json (Phase 2; == COST.md) \u2014 measured offline on committed grid",
+    "success": "SUCCESS.md (Phase 3, PR #18) \u2014 PINNED (live-capture grounding not byte-reproducible)",
+    "profiles": "benchmarks/approach_dominance/profiles.py (PRESETS \u222a PERSONAS, drift-guarded vs profile.ts)"
+  }
+}
