@@ -1,5 +1,8 @@
 # regenerable intermediates
+# NOTE: swebench_verified_sample.jsonl (the public SWE-bench Verified anchor fixture) IS
+# committed — it pins the exact sampled instances so the success numbers reproduce offline.
 governor_compare_results.json
+success_results.json
 .cache_benign.jsonl
 .empty-log-never-written.jsonl
 __pycache__/
