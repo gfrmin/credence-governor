@@ -1,0 +1,8 @@
+# regenerable intermediates
+# .humaneval.jsonl — public dataset, re-fetched on demand
+# cost_results.json — regenerated from the committed grid
+# NOTE: coding_grid.jsonl (the measured per-(task,model) pass/cost data) IS committed —
+# it costs real API spend to regenerate, so we vendor it as a reproducible fixture.
+.humaneval.jsonl
+cost_results.json
+__pycache__/
