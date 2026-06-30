@@ -109,96 +109,128 @@ def _train_bin_acc(grid, train_ids, bins, models, n_bins) -> dict[tuple[int, int
     return acc
 
 
+def _rival_picks(grid, models, bins, n_bins, train_ids):
+    """The fixed/learned router policies for one split — each a `tid -> model|list`.
+    Routers that learn (routellm) see ONLY the train split's per-bin accuracy."""
+    cheap, strong = models[0], models[-1]
+    acc = _train_bin_acc(grid, train_ids, bins, models, n_bins)
+    ci, si = 0, len(models) - 1
+
+    def clairvoyant(tid):
+        for m in models:
+            if _passed(grid, tid, m):
+                return m
+        return cheap
+
+    # RouteLLM-style done FAITHFULLY: a cheap-vs-strong WIN predictor — route to the strong
+    # model only where its per-bin train accuracy actually EXCEEDS the cheap one's (margin>0).
+    # (The earlier midpoint-of-cheap-accuracy cut routed the low bin to strong even when the
+    # belief said strong was no better — a strawman that manufactured a cost gap; this ties
+    # the cheap baseline exactly when the models are per-bin indistinguishable.)
+    rl_pick = {b: (strong if acc[(si, b)] - acc[(ci, b)] > 0 else cheap) for b in range(n_bins)}
+
+    picks = {f"always-{m.split('-')[1]}": (lambda t, m=m: m) for m in models}
+    picks["clairvoyant (bound)"] = clairvoyant
+    picks["frugal-cascade (bound)"] = lambda t: list(models)
+    picks["routellm-style"] = lambda t: rl_pick[bins[t]]
+    return picks
+
+
+def _aggregate(samples: dict[str, dict[str, list]]) -> list[dict]:
+    """{name: {'pass':[...], 'cost':[...]}} → mean±std rows across the seed sweep."""
+    out = []
+    for name, s in samples.items():
+        out.append({"name": name, "n_seeds": len(s["pass"]),
+                    "pass_mean": round(statistics.mean(s["pass"]), 4),
+                    "pass_std": round(statistics.pstdev(s["pass"]), 4) if len(s["pass"]) > 1 else 0.0,
+                    "cost_mean": round(statistics.mean(s["cost"]), 5),
+                    "cost_std": round(statistics.pstdev(s["cost"]), 5) if len(s["cost"]) > 1 else 0.0})
+    return out
+
+
 def main(argv=None) -> int:
     import argparse
+    from collections import defaultdict
     ap = argparse.ArgumentParser()
     ap.add_argument("--grid", default=O.GRID)
-    ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--seeds", type=int, default=25, help="train/test splits to average over (kills single-seed cherry-pick)")
     ap.add_argument("--skip-credence", action="store_true")
     args = ap.parse_args(argv)
 
     grid = O.load_grid(args.grid)
     models = list(O.ROSTER)                                  # [haiku, sonnet, opus] cheap→strong
-    cheap, strong = models[0], models[-1]
     task_ids = sorted({tid for (tid, _m) in grid})
     tasks = [t for t in D.load_tasks() if t.task_id in task_ids]
     bins = difficulty_bins(tasks)
     n_bins = max(bins.values()) + 1
-    train_ids, test_ids = _split(task_ids, seed=args.seed)
-    test_ids = sorted(test_ids)
     mean_cost = {m: statistics.mean([_cost(grid, t, m) for t in task_ids]) for m in models}
-    print(f"grid: {len(task_ids)} tasks × {len(models)} models; train={len(train_ids)} test={len(test_ids)}; "
+    seeds = list(range(args.seeds))
+    splits = {s: (lambda tr_te: (tr_te[0], sorted(tr_te[1])))(_split(task_ids, seed=s)) for s in seeds}
+    print(f"grid: {len(task_ids)} tasks × {len(models)} models; {len(seeds)} seeds; "
           f"mean cost/task: " + "  ".join(f"{m.split('-')[1]}=${mean_cost[m]:.4f}" for m in models))
 
-    rows: list[dict] = []
-    # fixed baselines + random + clairvoyant + cascade
-    for m in models:
-        rows.append(score(f"always-{m.split('-')[1]}", lambda t, m=m: m, test_ids, grid, models))
-    rng = random.Random(args.seed)
-    rows.append(score("random", lambda t: rng.choice(models), test_ids, grid, models))
+    riv: dict[str, dict[str, list]] = defaultdict(lambda: {"pass": [], "cost": []})
+    for s in seeds:
+        train_ids, test_ids = splits[s]
+        picks = _rival_picks(grid, models, bins, n_bins, train_ids)
+        rng = random.Random(s)
+        picks["random"] = lambda t: rng.choice(models)
+        for name, choose in picks.items():
+            r = score(name, choose, test_ids, grid, models)
+            riv[name]["pass"].append(r["pass_rate"])
+            riv[name]["cost"].append(r["total_cost"])
 
-    def clairvoyant(tid):                                    # cheapest model that passes (ceiling bound)
-        for m in models:
-            if _passed(grid, tid, m):
-                return m
-        return cheap
-    rows.append(score("clairvoyant (bound)", clairvoyant, test_ids, grid, models))
-    rows.append(score("frugal-cascade (bound)", lambda t: list(models), test_ids, grid, models))
-
-    # RouteLLM-style: binary cheap-vs-strong, per-bin threshold learned on train.
-    acc = _train_bin_acc(grid, train_ids, bins, models, n_bins)
-    ci, si = 0, len(models) - 1
-    cheap_acc = {b: acc[(ci, b)] for b in range(n_bins)}
-    cut = (min(cheap_acc.values()) + max(cheap_acc.values())) / 2.0
-    rl_pick = {b: (cheap if cheap_acc[b] >= cut else strong) for b in range(n_bins)}
-    rows.append(score("routellm-style", lambda t: rl_pick[bins[t]], test_ids, grid, models))
-
-    result = {"phase": "2 — cost/quality routing on a coding grid",
+    result = {"phase": "2 — cost/quality routing on a coding grid (seed-swept)",
               "dataset": "HumanEval (executable tests)", "models": models,
               "mean_cost_per_task": {m: round(mean_cost[m], 6) for m in models},
-              "n_tasks": len(task_ids), "n_bins": n_bins,
-              "train": len(train_ids), "test": len(test_ids), "rivals": rows}
+              "n_tasks": len(task_ids), "n_bins": n_bins, "n_seeds": len(seeds),
+              "rivals": _aggregate(riv)}
 
-    # Credence: the engine's EU-max router over the skin wire, reward swept across profiles.
     if not args.skip_credence:
         try:
-            result["credence"] = _run_credence(grid, models, bins, n_bins, train_ids, test_ids, mean_cost)
+            result["credence"] = _credence_sweep(grid, models, bins, n_bins, splits, mean_cost)
         except Exception as e:
             print(f"  (credence skin router skipped: {e})")
             result["credence_error"] = str(e)
 
     with open(OUT, "w") as f:
         json.dump(result, f, indent=2)
-    for r in rows:
-        print(f"  {r['name']:<26} pass={r['pass_rate']:.1%}  cost=${r['total_cost']:.4f}  ${r['cost_per_task']:.5f}/task")
+    for r in result["rivals"]:
+        print(f"  {r['name']:<26} pass={r['pass_mean']:.1%}±{r['pass_std']:.1%}  cost=${r['cost_mean']:.4f}±{r['cost_std']:.4f}")
     for cr in result.get("credence", []):
-        print(f"  credence@{cr['profile']:<18} pass={cr['pass_rate']:.1%}  cost=${cr['total_cost']:.4f}  "
-              f"${cr['cost_per_task']:.5f}/task")
+        print(f"  credence@{cr['name']:<18} pass={cr['pass_mean']:.1%}±{cr['pass_std']:.1%}  "
+              f"cost=${cr['cost_mean']:.4f}±{cr['cost_std']:.4f}")
     print(f"→ {OUT}")
     return 0
 
 
-def _run_credence(grid, models, bins, n_bins, train_ids, test_ids, mean_cost) -> list[dict]:
-    """The real EU-max router over the skin: per-(model,bin) Beta belief conditioned on TRAIN
-    outcomes, then route(reward) per TEST task's bin. Reward swept across buyer profiles."""
+def _credence_sweep(grid, models, bins, n_bins, splits, mean_cost) -> list[dict]:
+    """The real EU-max router over the skin, swept over BOTH the buyer reward profiles and the
+    seed splits: per-(model,bin) Beta belief conditioned on each split's TRAIN outcomes, then
+    route(reward) per TEST task. One skin session; mean±std per profile across seeds."""
+    from collections import defaultdict
     import routing_belief as RB
     from credence_governor_core import build_skin_client
 
+    costs = [mean_cost[m] for m in models]                  # decision uses mean cost; scoring uses real cost
+    samples: dict[str, dict[str, list]] = defaultdict(lambda: {"pass": [], "cost": []})
     skin = build_skin_client()
     try:
-        state = RB.build_state(skin, len(models), n_bins)
-        for tid in train_ids:                               # condition the belief on train outcomes
-            b = bins[tid]
-            for mi, m in enumerate(models):
-                state = RB.observe_correct(skin, state, mi, b, _passed(grid, tid, m))
-        costs = [mean_cost[m] for m in models]              # decision uses mean cost; scoring uses real cost
-        out: list[dict] = []
-        for profile, reward in PROFILE_REWARDS.items():
-            pick = {tid: models[RB.route(skin, state, costs, bins[tid], reward, n_bins)] for tid in test_ids}
-            row = score(f"credence@{profile}", lambda t: pick[t], test_ids, grid, models)
-            row["profile"], row["reward"] = profile, reward
-            out.append(row)
-        return out
+        for train_ids, test_ids in splits.values():
+            state = RB.build_state(skin, len(models), n_bins)
+            for tid in train_ids:                           # condition the belief on this split's train
+                b = bins[tid]
+                for mi, m in enumerate(models):
+                    state = RB.observe_correct(skin, state, mi, b, _passed(grid, tid, m))
+            for profile, reward in PROFILE_REWARDS.items():
+                pick = {tid: models[RB.route(skin, state, costs, bins[tid], reward, n_bins)] for tid in test_ids}
+                r = score(f"credence@{profile}", lambda t: pick[t], test_ids, grid, models)
+                samples[profile]["pass"].append(r["pass_rate"])
+                samples[profile]["cost"].append(r["total_cost"])
+        rows = _aggregate(samples)
+        for row in rows:
+            row["reward"] = PROFILE_REWARDS[row["name"]]
+        return rows
     finally:
         skin.shutdown()
 
