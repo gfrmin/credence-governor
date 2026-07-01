@@ -29,6 +29,37 @@ def _read_counts(brain_dir: str, file: str) -> Any | None:
         return json.load(f)
 
 
+# The skin verbs the governor drives (decide/route/observe + boot). A wire-compatible
+# engine (protocol major matches — the client re-checks that) can still predate one of
+# these, so assert they're advertised at boot: the daemon then won't start (⇒ adapters
+# fail open) instead of taking a first-decision 500.
+_REQUIRED_VERBS = frozenset({
+    "structure_bma", "structure_observe", "structure_decide",
+    "routing_init", "routing_decide", "routing_outcome",
+})
+
+
+def _assert_engine_capable(info: dict[str, Any]) -> None:
+    """Fail loud if the engine can't serve the verbs the governor drives.
+
+    `initialize()` returns {version, protocol, methods}. Note the wire does NOT reveal the
+    engine's git revision (version is a static "0.1.0"), so this is a capability check, not
+    a freshness one — the reproducible "current version" guarantee is the digest-pinned
+    DEFAULT_SKIN_IMAGE (see __init__.py).
+    """
+    methods = set(info.get("methods") or [])
+    if not methods:
+        raise RuntimeError(
+            "credence engine advertised no methods on initialize() — not a compatible skin "
+            "build. Pin a current image via CREDENCE_SKIN_IMAGE / CREDENCE_SKIN_COMMAND.")
+    missing = _REQUIRED_VERBS - methods
+    if missing:
+        raise RuntimeError(
+            f"credence engine is missing required verb(s) {sorted(missing)} (advertised "
+            f"{len(methods)} methods) — update the engine image; the governor cannot govern "
+            "without them.")
+
+
 class BrainSession:
     def __init__(self, skin: Any, brain_dir: str, log: ObservationLog):
         self.skin = skin
@@ -37,13 +68,21 @@ class BrainSession:
         self.waste: dict[str, str] | None = None
         self.harm: dict[str, str] | None = None
         self.routing: str | None = None
+        # {version, protocol, methods} from initialize(), for the boot banner/telemetry.
+        self.engine: dict[str, Any] | None = None
 
     def _verb(self, method: str, params: dict[str, Any]) -> Any:
         return self.skin._call(method, params)
 
     def boot(self) -> None:
         """Build the server-side beliefs (warm-seeded), then replay the local log on top."""
-        self.skin.initialize()
+        info = self.skin.initialize() or {}
+        self.engine = {
+            "version": info.get("version"),
+            "protocol": info.get("protocol"),
+            "methods": sorted(info.get("methods") or []),
+        }
+        _assert_engine_capable(info)
 
         self.waste = self._verb(
             "structure_bma",
