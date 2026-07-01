@@ -62,23 +62,44 @@ out incrementally.
 
 Bumping the engine to `1.13` is additive *for the engine*. It is **not** safe for the
 governor to then *assume* `1.13`: during any rolling deploy the governor may be talking to a
-`1.12` engine. So the governor **feature-detects and degrades** — it never hard-requires the
-new verbs:
+`1.12` engine. So the governor degrades to today's behaviour — but the mechanism **differs by
+what kind of thing the request adds**, and using the wrong one reintroduces the very silent
+skew this section exists to prevent, one abstraction level down.
 
-- **No `tail` coordinate (a `1.12` engine):** fall back to the scalar `expected_repeats` (the
-  governor's derived tail-`m` ladder) — i.e. today's behaviour, unchanged.
-- **No `structure_expect` (a `1.12` engine):** structural-only rationales; the
-  calibration/audit monitor stays dormant (it records "unavailable at this protocol", not an
-  error).
+**New *verbs* (Request 2, `structure_expect`) — detect-and-skip via `initialize().methods`.**
+Calling a verb a `1.12` engine doesn't have genuinely *errors*, so method-presence is the
+right signal: if `structure_expect` is absent, the governor shows structural-only rationales
+and the calibration/audit monitor stays dormant (recording "unavailable at this protocol",
+not erroring). This extends the A1 capability channel: `session._assert_engine_capable`
+(reading `initialize().methods`) stays **assert-or-crash for the six *required* verbs**
+(`structure_bma`/`structure_observe`/`structure_decide`,
+`routing_init`/`routing_decide`/`routing_outcome`) and gains **assert-or-*record* for the
+optional new verbs** (presence toggles the feature). Do **not** collapse the two into one
+all-or-nothing check, or a version skew turns a fail-open governor into one that crashes on
+rollout.
 
-Mechanically the channel already exists: the A1 boot capability assertion
-(`session._assert_engine_capable`, reading `initialize().methods`). It stays
-**assert-or-crash for the six *required* verbs** (`structure_bma`/`structure_observe`/
-`structure_decide`, `routing_init`/`routing_decide`/`routing_outcome`) and becomes
-**assert-or-*degrade* for the new *optional* ones** — presence toggles a feature, absence
-selects the fallback. Do **not** collapse the two into one all-or-nothing check, or a version
-skew turns a fail-open governor into one that crashes on rollout. Listed here so the engine
-agent knows the governor will **not** pin `1.13`, and the two sides can deploy independently.
+**New *keys on existing verbs* (Request 1, the `tail` coordinate) — do NOT detect; always send
+both.** `initialize().methods` lists `structure_decide` on *both* `1.12` and `1.13`, so
+method-presence **cannot** tell you whether the `tail` key is honoured. Infer "supported" from
+the verb being present, send only the `tail` handles to a `1.12` engine, and it **silently**
+ignores the unknown key and falls through to `expected_repeats = 0` — a myopic decision, no
+error, the governor believing it priced the tail. The fix uses Request 1's own precedence
+rule: **always send both** the scalar `expected_repeats` (the derived-ladder fallback) *and*
+the `tail` coordinate. On `1.13` the documented "tail wins" precedence uses the live tail (the
+scalar is harmless wasted bytes); on `1.12` the unknown `tail` is ignored and the scalar *is*
+the fallback — graceful by construction, no capability check. This is already the governor's
+idiom: `compute_cost` is sent unconditionally at its harmless `0.0` default for exactly this
+reason (`session.decide`).
+
+**Why `tail` is the first key that needs this.** The existing `harm` coordinate looks like a
+counterexample but isn't: it is gated on a *governor-side artifact* (`self.harm`, set only when
+the harm brain's warm-counts load), **not** on engine capability — and engine support for
+`harm` predates the governor's minimum pinned engine version, so it was never exposed to skew.
+`tail` is the first optional *key* whose engine support could lag the governor, which is why it
+needs the always-send-both handling and `harm` never did.
+
+Listed here so the engine agent knows the governor will **not** pin `1.13`, and the two sides
+can deploy independently.
 
 ---
 
@@ -128,7 +149,9 @@ end
 **Semantics & edge cases.**
 - **Precedence:** if both `tail` and the scalar `expected_repeats` are supplied, `tail`
   wins (the belief-derived value supersedes the literal). Please document this in
-  `protocol.md`.
+  `protocol.md` — the governor leans on it for version-skew safety: it **always sends both**,
+  so a `1.12` engine that ignores the unknown `tail` key falls back to the scalar
+  automatically (see *Version negotiation* above).
 - **β ≤ 1 divergence.** `expect(BetaMeasure, GeometricTail())` errors for β ≤ 1
   (`src/ontology.jl:692`). A continuation posterior built with the project's symmetric
   `Beta(2,2)` prior floor is `Beta(2+n₁, 2+n₀)`, so β ≥ 2 > 1 **by construction** — this
@@ -358,5 +381,5 @@ out; both auditable from day one) → (3 deferred — it needs the Gamma tier, n
 governor-side migration). The 1+2 bundle is the whole of the near-term offload — a few hours
 of engine work; everything after is a design conversation, not a drop-in. And before any of
 it ships, the consumer owns **version negotiation** (see the section above): the governor
-feature-detects `1.13` and degrades to today's behaviour against a `1.12` engine, so the two
-sides deploy independently.
+degrades to today's behaviour against a `1.12` engine — *detect-and-skip* for the new verb
+(R2), *always-send-both* for the new key (R1) — so the two sides deploy independently.
