@@ -37,7 +37,9 @@ they do — please push back if any request appears to break one, because then I
    change / MINOR on additive (`docs/decouple/master-plan.md`). **All four requests are
    additive → one MINOR bump to `1.13`** (new optional coordinate, new read-only verbs).
    No existing verb changes shape. Remember the CI invariant: the header in `protocol.md`
-   must equal `PROTOCOL_VERSION`.
+   must equal `PROTOCOL_VERSION`. The **consumer's** side of this bump — feature-detect and
+   degrade so a `1.12` engine still works during a rolling deploy — is specified in *Version
+   negotiation* below; it is the governor's job, not the engine's.
 
 3. **Each request reuses existing internal machinery.** None of these ask you to invent
    math. `belief_at_context`, `GeometricTail`, `expect`, `build_function`, and
@@ -52,7 +54,35 @@ roundtrip at `~:1155` is the closest template — build model, `structure_observ
 
 ---
 
-## Request 1 — a `tail` coordinate on `structure_decide` (DO FIRST: highest value, smallest surface)
+## Before any engine work — the consumer's commitment: version negotiation
+
+This is the one item on this page the **consumer owns**, not the engine — but it belongs here
+because it must be settled before `1.13` ships, and it is what keeps the offload safe to roll
+out incrementally.
+
+Bumping the engine to `1.13` is additive *for the engine*. It is **not** safe for the
+governor to then *assume* `1.13`: during any rolling deploy the governor may be talking to a
+`1.12` engine. So the governor **feature-detects and degrades** — it never hard-requires the
+new verbs:
+
+- **No `tail` coordinate (a `1.12` engine):** fall back to the scalar `expected_repeats` (the
+  governor's derived tail-`m` ladder) — i.e. today's behaviour, unchanged.
+- **No `structure_expect` (a `1.12` engine):** structural-only rationales; the
+  calibration/audit monitor stays dormant (it records "unavailable at this protocol", not an
+  error).
+
+Mechanically the channel already exists: the A1 boot capability assertion
+(`session._assert_engine_capable`, reading `initialize().methods`). It stays
+**assert-or-crash for the six *required* verbs** (`structure_bma`/`structure_observe`/
+`structure_decide`, `routing_init`/`routing_decide`/`routing_outcome`) and becomes
+**assert-or-*degrade* for the new *optional* ones** — presence toggles a feature, absence
+selects the fallback. Do **not** collapse the two into one all-or-nothing check, or a version
+skew turns a fail-open governor into one that crashes on rollout. Listed here so the engine
+agent knows the governor will **not** pin `1.13`, and the two sides can deploy independently.
+
+---
+
+## Request 1 — a `tail` coordinate on `structure_decide` (highest value, smallest surface — ships with Request 2)
 
 **Why.** `decide_with_voi` already accepts `expected_repeats::Float64` (`src/stdlib.jl:232`)
 and prices a block as preventing `tf = 1 + expected_repeats` calls. The governor wants that
@@ -119,15 +149,21 @@ behaviour byte-for-byte.
 to `1.12`; with it present, `expected_repeats` equals `α/(β−1)` of the tail belief at the
 context.
 
-**Governor-side follow-on this unlocks.** The governor already ships an unused
+**Governor-side follow-on this unlocks.** Request 1 is the *live* form of a quantity the
+governor already computed by hand. It derived an `m`-ladder off
 `data/brain/tail_brain.counts.json` (a `structure_bma` continuation posterior over its
-governance features). Once this lands it boots that brain via `structure_bma` and passes the
-handle on every `decide` — closing the `expected_repeats` question honestly, with no
-governor-side `m`.
+governance features) as a **stopgap** — but never wired it into live decisions
+(`expected_repeats` is `0` today), precisely because a governor-side projection would put the
+`α/(β−1)` arithmetic on the wrong side of Invariant 1. R1 computes that same `E[ρ/(1−ρ)]`
+engine-side; once it lands the governor boots the real `tail_brain` over the wire, passes the
+handle on every `decide`, and **deletes the projection entirely** — the stopgap was the
+bridge until this verb existed. One audit dependency: a tail-driven block is only *legible*
+if the governor can read back the `m` that caused it, and that read-out is **Request 2** —
+which is why the two ship together, not in sequence.
 
 ---
 
-## Request 2 — a `structure_expect` read verb (numeric rationales + calibration)
+## Request 2 — a `structure_expect` read verb (the calibration/audit instrument — ship with Request 1)
 
 **Why.** The governor can currently show only *structural* rationales ("blocked because the
 egress destination is external and the payload is credential-shaped"). It cannot show the
@@ -135,6 +171,18 @@ egress destination is external and the payload is credential-shaped"). It cannot
 `structure_bma` belief. That number is also what an offline calibration monitor needs (is
 the operator's override stream drifting the posterior in a consistent direction?). The brain
 computes it internally inside `handle_structure_decide`; it just isn't readable.
+
+**Why it ships *with* Request 1, not after it.** Two reasons, both load-bearing rather than
+cosmetic. (1) `structure_expect` is the exact verb the **offline calibration monitor** needs —
+and that monitor is the *only* backstop for drift *direction*: the online harm-learning
+guardrails bound drift's rate and magnitude but never its sign, so a consistently
+miscalibrated operator is caught here or nowhere. It is a safety instrument with a defined
+cadence, not a "nicer numbers" feature. (2) It makes Request 1 **auditable**. The
+harm-learning discipline already commits to logging every override's resulting observation;
+by symmetry every *tail-driven* block should log the `m` that drove it. Ship R1 alone and you
+get decisions you cannot introspect — you block, but cannot read the tail that caused the
+block, which violates that same audit discipline. So: R1 folds the tail in, R2 reads it out,
+and from day one every tail- and harm-driven decision is both acted on and legible.
 
 **What already exists.** There *is* an `expect` verb (`handle_expect`,
 `apps/skin/server.jl:1121`) — but it takes a **raw `state_id` + a `function` spec** and
@@ -174,20 +222,23 @@ Register it in `SKIN_METHODS` and add the `elseif` arm.
 - With `Identity`: returns `P(approve | X)` for the waste model, or `P(unsafe | X)` for the
   harm model — the numeric rationale and the calibration signal, immediately.
 - With `GeometricTail`: returns the tail `m` — **but** `build_function` does **not** yet
-  construct `GeometricTail` (it isn't in the supported list above). If you want `m` readable
-  over the wire (as opposed to only *folded in* by Request 1), add a
-  `{"type": "geometric_tail"}` case to `build_function` returning `GeometricTail()`. This is
-  optional for Request 2's primary purpose (`Identity` covers rationales + calibration) and
-  is the only reason to touch `build_function` at all.
+  construct `GeometricTail` (it isn't in the supported list above), so this verb needs one
+  case added: `{"type": "geometric_tail"}` → `GeometricTail()`. Treat that case as **in
+  scope, not optional** — it is what makes Request 1's tail-driven blocks auditable (read
+  back the `m` that drove the block, per the symmetry argument above). Same β > 1 caveat as
+  Request 1 (safe by construction for a `Beta(2,2)`-floored continuation posterior; wrap
+  anyway). It is the only reason to touch `build_function`.
 - Read-only: no `STATE_REGISTRY` mutation. Invariant 1 holds — a scalar crosses the wire.
 
 **Tests.** In `test_skin.py`: build + `structure_observe` a known count at a context, then
 assert `structure_expect` with `Identity` returns the analytic posterior mean within
-tolerance; assert an unknown `model_id`/`state_id` yields a clean error.
+tolerance, and with `geometric_tail` returns `α/(β−1)` — matching the `expected_repeats`
+Request 1 folds in for the same belief; assert an unknown `model_id`/`state_id` yields a
+clean error.
 
 **Acceptance.** `structure_expect(model, state, features, identity)` returns the same number
-the engine uses internally at that context; adding the verb does not perturb any existing
-verb.
+the engine uses internally at that context, and `(…, geometric_tail)` returns `α/(β−1)` (the
+same `m` Request 1 folds in); adding the verb does not perturb any existing verb.
 
 **Governor-side follow-on.** Numeric `P(unsafe)`/`P(approve)` in every rationale and PreToolUse
 message; a committed offline calibration monitor that reads the posterior at held-out
@@ -196,7 +247,7 @@ rate/magnitude, never its *direction*).
 
 ---
 
-## Request 3 — a per-tool-call duration belief (lowest priority; mostly falls out of Request 2)
+## Request 3 — a per-tool-call duration belief (lowest priority; needs the Gamma tier — deferred)
 
 **Why.** `decide_with_voi` has a time term `w_time · exp_time` (`src/stdlib.jl:232`) that
 currently never bites, because the governor has no source for `exp_time` (expected seconds
@@ -207,16 +258,18 @@ for *this* tool call). A block that also saves wall-clock should be able to pric
 (`Gamma(α0+Σturns, β0+n_obs) × rate`, `:29`). That's model *turn* latency, not per-tool-call
 duration, and it's internal to `RoutingState` — **not wire-readable**.
 
-**The honest shape of this request.** Most of it is *not* an engine ask:
-- The governor can model tool-call duration as its **own** `structure_bma` belief (it
-  already builds/observes/reads `structure_bma`), keyed on the tool-call context, and read
-  `E[duration | X]` via **Request 2's `structure_expect` with `Identity`**. No new engine
-  machinery beyond Request 2.
-- The **one** genuine engine ask is a likelihood mismatch: duration is positive-continuous,
-  and `structure_bma` is **Beta-Bernoulli** (`handle_structure_observe` takes a 0/1
-  `observation`, `apps/skin/server.jl:1281`). Modelling duration well wants a **Gamma-conjugate** structural
-  belief (the machinery exists — `GammaPrevision` is used in `reconstruct_latency_from_data`
-  — but there's no `structure_bma`-tier Gamma model, and no verb to build/observe/read one).
+**The honest shape of this request.** The tempting shortcut does **not** work. You cannot
+model tool-call duration as a `structure_bma` belief and read `E[duration | X]` through
+Request 2: `structure_bma` is **Beta-Bernoulli** (`handle_structure_observe` takes a 0/1
+`observation`, `apps/skin/server.jl:1281`), so a duration would have to be thresholded to a
+bit — and the read then yields `P(slow | X)` for some **hardcoded cut**: a threshold-dependent
+quantity that is *not* `E[duration]` (and a hardcoded cut is exactly the design this project
+rejects). Duration is positive-continuous and wants the **Gamma tier, full stop** — a
+Gamma-conjugate sibling of the `structure_bma` trio (`structure_bma_gamma` /
+`structure_observe_gamma`), read via `structure_expect` with `Identity`. The machinery exists
+internally — `GammaPrevision` drives `reconstruct_latency_from_data` (`src/routing.jl:29`) —
+but there is no `structure_bma`-tier Gamma model and no verb to build/observe/read one. So
+this is a **genuine engine ask**, just a deferred one.
 
 **Recommendation.** Defer until the time term is *shown to matter* on real traffic. If it
 does, the minimal ask is a Gamma-likelihood sibling of the `structure_bma` trio
@@ -259,8 +312,12 @@ wire. This is the "internal moves" frontier and the largest offload of decision-
 **So this request is a two-sided dependency, not a drop-in.** The concrete, orderable
 engine-side asks are: (a) merge the scalar accessors to `master`; (b) expose one
 `explore_*`/selection verb operating on a registered program-space state, returning the
-chosen meta-action + its scalar EU. Ship (a) first — it's independently useful and unblocks
-the design conversation about (b) and the governor migration.
+chosen meta-action + its scalar EU. Ship (a) first — but note *who* it helps: it is
+independently useful to the **engine/research side** (it de-risks the
+`exploration-budget/dominance` branch and makes the accessors available to the paper and
+benchmark work), **not** to the governor, which cannot consume them until the
+tabular→program-space migration. Merge (a) on that basis — not expecting governor
+consumption, which arrives only with (b) *and* the migration.
 
 **Acceptance (engine side).** The scalar accessors are on `master` with tests; a
 read-only `explore_*` verb returns the argmax meta-action and its scalar value for a
@@ -290,12 +347,16 @@ registered program-space state, without applying it (apply can be a second, opt-
 
 | # | Request | Size | Depends on | Verb surface | Unlocks (governor) |
 |---|---------|------|-----------|--------------|--------------------|
-| **1** | `tail` coordinate on `structure_decide` | **S** | — (mirror the `harm` arm) | +1 optional key | belief-derived `expected_repeats`; boot the shipped `tail_brain` |
-| **2** | `structure_expect` read verb | **S–M** | — (`build_function` exists; +`geometric_tail` case optional) | +1 read verb | numeric `P(unsafe)` rationales; offline calibration monitor |
+| **1** | `tail` coordinate on `structure_decide` | **S** | — (mirror the `harm` arm); **pairs with 2** | +1 optional key | belief-derived `expected_repeats`; **retires** the governor's stopgap tail-`m` projection |
+| **2** | `structure_expect` read verb | **S–M** | — (`build_function` + **required** `geometric_tail` case); **pairs with 1** | +1 read verb | numeric `P(unsafe)` rationales; **the offline calibration/audit monitor**; reads out R1's tail `m` |
 | **3** | per-tool-call duration belief | **S engine / M total** | Request 2; a Gamma-tier `structure_bma` | +Gamma trio (if pursued) | the gate's `w_time·exp_time` term bites |
 | **4** | exploration/internal-moves over the wire | **L** | accessors→`master`; **governor program-space migration** | +selection verb(s) | brain-driven feature discovery / compression |
 
-**Recommended order:** 1 → 2 → (3 deferred until the time term is shown to matter) → 4
-(land the accessors on `master` first; the full loop waits on the governor-side migration).
-Requests 1 and 2 are each a few hours and independently shippable; they are the whole of the
-near-term offload. Everything after is a design conversation, not a drop-in.
+**Recommended order:** **1 + 2 together, as one unit** (R1 folds the tail in, R2 reads it
+out; both auditable from day one) → (3 deferred — it needs the Gamma tier, not R2) → 4
+(accessors → `master` first, for engine/research value only; the full loop waits on the
+governor-side migration). The 1+2 bundle is the whole of the near-term offload — a few hours
+of engine work; everything after is a design conversation, not a drop-in. And before any of
+it ships, the consumer owns **version negotiation** (see the section above): the governor
+feature-detects `1.13` and degrades to today's behaviour against a `1.12` engine, so the two
+sides deploy independently.
