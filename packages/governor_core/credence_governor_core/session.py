@@ -38,14 +38,33 @@ _REQUIRED_VERBS = frozenset({
     "routing_init", "routing_decide", "routing_outcome",
 })
 
+# Optional verbs a *newer* engine (a protocol MINOR bump) may advertise. Their ABSENCE must
+# DEGRADE, never crash — a rolling deploy can put the governor in front of an older engine.
+# Recorded at boot so consumers gate on a stored capability, not an ad-hoc initialize() peek.
+# NOTE: this covers new *verbs* only. A new optional *key* on an existing verb (e.g. R1's
+# `tail` on structure_decide) is invisible to method-detection (the verb is advertised on both
+# versions) — that case is handled by always sending a scalar fallback next to the key, never
+# by a capability check (see decide(); docs/engine-wire-requests.md § version negotiation).
+_OPTIONAL_VERBS = frozenset({
+    "structure_expect",  # R2: per-context P(unsafe|X) read → numeric rationales + calibration
+})
 
-def _assert_engine_capable(info: dict[str, Any]) -> None:
-    """Fail loud if the engine can't serve the verbs the governor drives.
 
-    `initialize()` returns {version, protocol, methods}. Note the wire does NOT reveal the
-    engine's git revision (version is a static "0.1.0"), so this is a capability check, not
-    a freshness one — the reproducible "current version" guarantee is the digest-pinned
-    DEFAULT_SKIN_IMAGE (see __init__.py).
+def _assert_engine_capable(info: dict[str, Any]) -> frozenset[str]:
+    """Fail loud if the engine can't serve the REQUIRED verbs; record which OPTIONAL ones it has.
+
+    `initialize()` returns {version, protocol, methods}. Required verbs are **assert-or-crash**
+    (the daemon won't start ⇒ adapters fail open, better than a first-decision 500). Optional
+    verbs are **assert-or-record**: their absence is normal against an older engine, so we return
+    the advertised subset for consumers to degrade against — we never raise on them. Do NOT fold
+    the two into one all-or-nothing check, or a version skew crashes a fail-open governor on
+    rollout.
+
+    Note the wire does NOT reveal the engine's git revision (version is a static "0.1.0"), so this
+    is a capability check, not a freshness one — the reproducible "current version" guarantee is
+    the digest-pinned DEFAULT_SKIN_IMAGE (see __init__.py).
+
+    Returns the frozenset of advertised optional verbs (∅ against a 1.12 engine).
     """
     methods = set(info.get("methods") or [])
     if not methods:
@@ -58,6 +77,7 @@ def _assert_engine_capable(info: dict[str, Any]) -> None:
             f"credence engine is missing required verb(s) {sorted(missing)} (advertised "
             f"{len(methods)} methods) — update the engine image; the governor cannot govern "
             "without them.")
+    return _OPTIONAL_VERBS & methods
 
 
 class BrainSession:
@@ -70,9 +90,20 @@ class BrainSession:
         self.routing: str | None = None
         # {version, protocol, methods} from initialize(), for the boot banner/telemetry.
         self.engine: dict[str, Any] | None = None
+        # Optional engine capabilities advertised at boot (∅ ⇒ degrade to fallbacks). See _OPTIONAL_VERBS.
+        self.caps: frozenset[str] = frozenset()
+        # R1 continuation ("tail") belief handle. Unset here on purpose: the `tail` coordinate is
+        # latent plumbing (decide() sends it iff this is set), pending the tail-brain boot + its
+        # M4 validation AND an engine that honours the key. Until then the scalar expected_repeats
+        # fallback (UTILITY, default 0.0 ⇒ myopic == today) is what's live.
+        self.tail: dict[str, str] | None = None
 
     def _verb(self, method: str, params: dict[str, Any]) -> Any:
         return self.skin._call(method, params)
+
+    def supports(self, verb: str) -> bool:
+        """True iff the engine advertised this OPTIONAL verb at boot (else the consumer degrades)."""
+        return verb in self.caps
 
     def boot(self) -> None:
         """Build the server-side beliefs (warm-seeded), then replay the local log on top."""
@@ -82,7 +113,7 @@ class BrainSession:
             "protocol": info.get("protocol"),
             "methods": sorted(info.get("methods") or []),
         }
-        _assert_engine_capable(info)
+        self.caps = _assert_engine_capable(info)
 
         self.waste = self._verb(
             "structure_bma",
@@ -171,8 +202,9 @@ class BrainSession:
         features: dict[str, str],
         harm_features: dict[str, str] | None = None,
         profile: dict[str, float] | None = None,
+        tail_features: dict[str, str] | None = None,
     ) -> str:
-        """proceed/block/ask EU decision at a context (with the harm coordinate when available)."""
+        """proceed/block/ask EU decision at a context (with the harm + tail coordinates when available)."""
         assert self.waste is not None, "boot() must run before decide()"
         profile = profile or {}
         params: dict[str, Any] = {
@@ -185,6 +217,12 @@ class BrainSession:
             # The forward re-inference an :ask commits to (subtracted from EU(ask) only).
             # Default 0.0 ⇒ the pinned engine's decide_with_voi reduces to the pre-compute decision.
             "compute_cost": profile.get("compute_cost", UTILITY["compute_cost"]),
+            # Always-sent scalar tail fallback (default 0.0 ⇒ myopic, == today; the pinned engine
+            # already defaults an absent expected_repeats to 0, so sending 0.0 is decision-identical).
+            # On an engine that honours the `tail` coordinate below, the live tail supersedes this;
+            # on one that doesn't, the unknown `tail` key is ignored and THIS is the fallback —
+            # graceful by construction, no capability check (docs/engine-wire-requests.md).
+            "expected_repeats": profile.get("expected_repeats", UTILITY["expected_repeats"]),
         }
         if self.harm and harm_features:
             params["harm"] = {
@@ -192,6 +230,15 @@ class BrainSession:
                 "state_id": self.harm["state_id"],
                 "features": harm_features,
                 "harm_cost": profile.get("harm_cost", UTILITY["harm_cost"]),
+            }
+        # R1: send the continuation-belief handle so the engine folds in the LIVE tail itself.
+        # Gated on a booted tail belief (latent this release ⇒ never sent yet), NOT on engine
+        # capability — a `1.12` engine silently drops the unknown key and the scalar above stands in.
+        if self.tail and tail_features:
+            params["tail"] = {
+                "model_id": self.tail["model_id"],
+                "state_id": self.tail["state_id"],
+                "features": tail_features,
             }
         return self._verb("structure_decide", params)["action"]
 
