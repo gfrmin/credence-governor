@@ -83,4 +83,5 @@ UTILITY = {
     "harm_cost": 1.0,     # harm cost H (dollars) — multi-outcome governance ON
     "reward": 0.02,       # correct-answer-value (dollars) — the routing reward
     "compute_cost": 0.0,  # $ of the forward re-inference an :ask commits to; 0 ⇒ engine reduces to the pre-compute decision
+    "expected_repeats": 0.0,  # always-sent scalar tail fallback E[remaining calls a block prevents]; 0 ⇒ myopic (== today). R1's `tail` coordinate supersedes it on an engine that honours it (docs/engine-wire-requests.md § version negotiation).
 }
