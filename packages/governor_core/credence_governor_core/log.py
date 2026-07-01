@@ -56,6 +56,28 @@ class ObservationLog:
                 out.append({"features": features, "observation": 0})
         return out
 
+    def replay_harm_contexts(self) -> list[dict[str, Any]]:
+        """(features, unsafe) pairs for HARM-belief replay. Only user-responded records that
+        carry an explicit `harm_observation` (0|1) are harm evidence — the safety-gate and the
+        polarity inversion (harm_obs = 1 − waste_obs) were decided at feedback time and frozen
+        on the record, so replay is exact and order-independent and never recomputes them.
+        Records without the field (all pre-A2 history) are skipped, so an old log still
+        replays its governance labels unchanged and grows no harm evidence retroactively."""
+        records = self.read()
+        features_by_id: dict[str, dict[str, str]] = {}
+        for r in records:
+            if r.get("event_type") == "tool-proposed" and isinstance(r.get("event_id"), str) and r.get("features"):
+                features_by_id[r["event_id"]] = r["features"]
+        out: list[dict[str, Any]] = []
+        for r in records:
+            if r.get("event_type") != "user-responded" or r.get("harm_observation") is None:
+                continue
+            features = features_by_id.get(str(r.get("in_response_to")))
+            if features is None:
+                continue
+            out.append({"features": features, "unsafe": int(r["harm_observation"])})
+        return out
+
     def replay_route_outcomes(self) -> list[dict[str, Any]]:
         """(model_id, features, success, human?) for routing replay — route-outcome events."""
         out: list[dict[str, Any]] = []

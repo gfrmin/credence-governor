@@ -82,4 +82,5 @@ UTILITY = {
     "interrupt_cost": 0.02,  # interruption cost q (dollars)
     "harm_cost": 1.0,     # harm cost H (dollars) — multi-outcome governance ON
     "reward": 0.02,       # correct-answer-value (dollars) — the routing reward
+    "compute_cost": 0.0,  # $ of the forward re-inference an :ask commits to; 0 ⇒ engine reduces to the pre-compute decision
 }

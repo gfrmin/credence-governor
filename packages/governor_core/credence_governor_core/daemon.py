@@ -23,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from typing import Any, Callable
 
+from .config import HARM
 from .features import extract_features
 from .capture import RawCaptureLog
 from .log import ObservationLog
@@ -40,13 +41,14 @@ def _short_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
 
-def _ask_text(proposed: Any) -> str:
+def _ask_text(proposed: Any, rationale: str | None = None) -> str:
     tool = str((proposed or {}).get("tool_name") or (proposed or {}).get("tool") or "(unknown)")
     inp = (proposed or {}).get("input")
     s = "(none)" if inp is None else json.dumps(inp)
     if len(s) > 80:
         s = s[:80] + "…"
-    return f"Allow `{tool}` to run with input `{s}`?"
+    base = f"Allow `{tool}` to run with input `{s}`?"
+    return f"{base} — {rationale}" if rationale else base
 
 
 # A block is "safety" (hard deny, no override offered) iff an ATTACK-PATTERN feature is hot:
@@ -157,11 +159,71 @@ def _block_category(features: dict[str, str]) -> str:
     return "safety" if hot else "waste"
 
 
-def _action_signal(action: str, proposed: Any) -> dict[str, Any]:
+# Human-readable phrases for the structural coordinates a rationale names.
+_SENSITIVITY_PHRASE = {
+    "credential-store": "a credential store (.env, keys, .aws/…)",
+    "system-privileged": "a privileged system path (~/.ssh, /etc, cron…)",
+    "project-config": "CI/deploy config (workflows, Dockerfile, lockfiles)",
+}
+_ACTION_PHRASE = {
+    "destructive": "a destructive op (rm / reset --hard / DROP…)",
+    "privilege-op": "a privilege op (sudo / chmod +s…)",
+    "package-mutation": "a package/dependency mutation",
+    "credential-access": "a credential read",
+}
+
+
+def _rationale(features: dict[str, str], category: str) -> str:
+    """A specific, structural "why" for a gated call — the coordinates that made it safety- or
+    waste-shaped. Deterministic feature inspection (like _block_category, Invariant 1): the point
+    is that an override lands against a STATED reason, not a black box, which is what makes it a
+    trustworthy calibration signal for the harm belief (A2). It names the dominant hot
+    coordinate(s) — usually, but not always, the label's exact motivation. It is ADVISORY
+    (legibility only): the gate and the harm-gating both use _block_category, never this string."""
+    src = features.get("taint-source", "none")
+    own = src in _OWN_SOURCES
+    external_prov = src in _EXTERNAL_SOURCES
+    injected = (
+        features.get("injected-imperative", "no") == "yes"
+        or features.get("taint-flow", "none") == "tainted-external-target"
+    )
+    sensitivity = features.get("target-sensitivity", "none")
+    action = features.get("coding-action-class", "other")
+    egress_ext = features.get("egress-destination", "none") == "external-unknown"
+
+    reasons: list[str] = []
+    if features.get("cred-exfil-chain", "no") == "yes" or (
+        egress_ext and (action == "credential-access" or sensitivity == "credential-store")
+    ):
+        reasons.append("reads a credential store and sends it to an unknown external host")
+    if injected and not own:
+        reasons.append("acts on an instruction from untrusted fetched content")
+    if external_prov and sensitivity in _HOT_SENSITIVITY:
+        reasons.append(
+            f"an untrusted source steered a change to {_SENSITIVITY_PHRASE.get(sensitivity, sensitivity)}"
+        )
+    elif sensitivity in _SENSITIVITY_PHRASE:
+        reasons.append(f"touches {_SENSITIVITY_PHRASE[sensitivity]}")
+    if action in _ACTION_PHRASE and not reasons:
+        reasons.append(_ACTION_PHRASE[action])
+    if reasons:
+        return "; ".join(dict.fromkeys(reasons))
+    if features.get("recent-identical-call-count", "ident-0") != "ident-0":
+        return "a repeated identical call (possible loop)"
+    return "flagged as likely unsafe" if category == "safety" else "flagged as low-value / a possible loop"
+
+
+def _harm_cell(features: dict[str, str]) -> tuple[str, ...]:
+    """The 7-tuple harm context (the belief's cell), for per-cell burst dedup of harm-learning."""
+    return tuple(features.get(n, "") for n in HARM["feature_names"])
+
+
+def _action_signal(action: str, proposed: Any, rationale: str | None = None) -> dict[str, Any]:
     if action == "ask":
-        return {"effector": "ask", "parameters": {"text": _ask_text(proposed)}}
+        return {"effector": "ask", "parameters": {"text": _ask_text(proposed, rationale)}}
     if action == "block":
-        return {"effector": "block", "parameters": {"reason": "Refused based on prior approval observations."}}
+        reason = f"credence-governor: {rationale}" if rationale else "Refused based on prior approval observations."
+        return {"effector": "block", "parameters": {"reason": reason}}
     return {"effector": "proceed", "parameters": {}}
 
 
@@ -212,9 +274,9 @@ class Daemon:
         for q in subs:
             q.put(frame)
 
-    def _emit_decision(self, in_response_to: str, action: str, proposed: Any) -> None:
+    def _emit_decision(self, in_response_to: str, action: str, proposed: Any, rationale: str | None = None) -> None:
         self.log.append({"event_type": "decision", "in_response_to": in_response_to, "action": action})
-        eff = _action_signal(action, proposed)
+        eff = _action_signal(action, proposed, rationale)
         self._emit(
             {
                 "signal_type": "effector",
@@ -245,7 +307,9 @@ class Daemon:
             except Exception as err:  # noqa: BLE001 — telemetry must never break a decision
                 self.logline(f"credence-governor: raw capture failed (non-fatal): {err}")
         category = _block_category(features)
-        return {"action": action, "features": features, "event_id": event_id, "category": category}
+        rationale = _rationale(features, category)
+        return {"action": action, "features": features, "event_id": event_id,
+                "category": category, "rationale": rationale}
 
     # ── explicit human feedback (Claude Code has no onResolution; close the loop here) ──
     def _features_for_event(self, event_id: str) -> dict[str, str] | None:
@@ -274,11 +338,12 @@ class Daemon:
         return gated or last_proposed
 
     def feedback(self, event_id: str | None, observation: int) -> dict[str, Any]:
-        """Record a human verdict on a past decision and condition the governance belief —
-        the Claude Code analogue of OpenClaw's onResolution → user-responded → observe.
-        event_id None => the most recent decision. Reuses the existing observe/replay path:
-        the appended user-responded record is exactly what replay_contexts() re-applies on
-        boot, so the correction survives a restart (order-independent => exact)."""
+        """Record a human verdict on a past decision and condition the beliefs — the Claude Code
+        analogue of OpenClaw's onResolution → user-responded → observe. event_id None => the most
+        recent gated decision. The appended user-responded record is exactly what boot's replay
+        re-applies (governance always; harm only when it carries a harm_observation), so the
+        correction survives a restart (order-independent => exact). A verdict on a SAFETY-category
+        gate also teaches the harm overlay (see _plan_verdict)."""
         eid = event_id or self._last_gated_event_id()
         if not eid:
             return {"ok": False, "error": "no decision on record to correct"}
@@ -286,12 +351,63 @@ class Daemon:
         if features is None:
             return {"ok": False, "error": f"unknown event_id {eid}"}
         obs = 1 if observation else 0
+        extra = self._plan_verdict(features, obs)
         self.log.append(
-            {"event_type": "user-responded", "in_response_to": eid, "response": "yes" if obs else "no", "human": True}
+            {"event_type": "user-responded", "in_response_to": eid,
+             "response": "yes" if obs else "no", "human": True, **extra}
         )
         with self.lock:
-            self.session.observe(features, obs)
-        return {"ok": True, "event_id": eid, "observation": obs}
+            self._condition_verdict(features, obs, extra)
+        return {"ok": True, "event_id": eid, "observation": obs,
+                "category": extra["category"], "harm_observation": extra.get("harm_observation")}
+
+    # ── one human verdict → beliefs (shared by /feedback and the SSE user-responded path) ──
+    def _plan_verdict(self, features: dict[str, str], obs: int) -> dict[str, Any]:
+        """The audit + replay fields for one verdict, WITHOUT touching beliefs (so it can run
+        outside the engine lock; it only reads the log, for the burst-dedup check). The waste
+        belief always learns (the general approve/refuse posterior); the harm overlay learns only
+        on a SAFETY-category gate, with INVERSE polarity (harm_obs = 1 − obs: approving is
+        "safe"→0, rejecting is "unsafe"→1), rate-bounded by per-cell burst dedup. A
+        `harm_observation` field marks a verdict that WILL be conditioned (and replayed on boot);
+        `harm_deduped` is a burst repeat — audited only, never conditioned or replayed."""
+        category = _block_category(features)
+        extra: dict[str, Any] = {"category": category, "rationale_shown": _rationale(features, category)}
+        if category == "safety":
+            verdict = 1 - obs
+            if self._harm_burst_duplicate(features, verdict):
+                extra["harm_deduped"] = verdict
+            else:
+                extra["harm_observation"] = verdict
+        return extra
+
+    def _condition_verdict(self, features: dict[str, str], obs: int, extra: dict[str, Any]) -> None:
+        """Apply one verdict to the beliefs (engine lock held) — the exact operations boot's
+        replay re-applies, so live == replay. Waste always; harm only when _plan_verdict marked a
+        (non-deduped) harm_observation."""
+        self.session.observe(features, obs)
+        if extra.get("harm_observation") is not None:
+            self.session.observe_harm(features, int(extra["harm_observation"]))
+
+    def _harm_burst_duplicate(self, features: dict[str, str], verdict: int) -> bool:
+        """True if the most recent CONDITIONED harm-observation on this exact harm-cell had the
+        same verdict — a repeat of this cell's last verdict (a burst), audited but not stacked
+        (an intervening OTHER-cell verdict does not break it). Bounds the RATE of
+        drift a burst of identical overrides can cause; the DIRECTION a consistently-miscalibrated
+        operator induces is the OFFLINE audit's job, not this online rule's."""
+        cell = _harm_cell(features)
+        records = self.log.read()
+        feats_by_id = {
+            r["event_id"]: r["features"]
+            for r in records
+            if r.get("event_type") == "tool-proposed" and r.get("event_id") and r.get("features")
+        }
+        for r in reversed(records):
+            if r.get("event_type") != "user-responded" or r.get("harm_observation") is None:
+                continue
+            feats = feats_by_id.get(str(r.get("in_response_to")))
+            if feats is not None and _harm_cell(feats) == cell:
+                return int(r["harm_observation"]) == int(verdict)
+        return False
 
     # ── the async sensor dispatch (in-process plugins) ──
     def dispatch(self, event: dict[str, Any]) -> None:
@@ -304,17 +420,26 @@ class Daemon:
             self.log.append({"event_type": "tool-proposed", "event_id": event_id, "features": features})
             if action == "ask":
                 self._pending_asks[event_id] = features
-            self._emit_decision(event_id, action, event.get("proposed_call"))
+            self._emit_decision(
+                event_id, action, event.get("proposed_call"),
+                _rationale(features, _block_category(features)),
+            )
         elif typ == "user-responded":
             original = str(event.get("in_response_to") or "")
             # Pop unconditionally so timeouts / other responses don't leak the entry;
             # only yes/no are labels the belief learns from.
             features = self._pending_asks.pop(original, None)
             response = str(event.get("response") or "")
-            self.log.append({"event_type": "user-responded", "in_response_to": original, "response": response})
+            record = {"event_type": "user-responded", "in_response_to": original, "response": response}
             if features and response in ("yes", "no"):
+                obs = 1 if response == "yes" else 0
+                extra = self._plan_verdict(features, obs)
+                record.update(extra)
+                self.log.append(record)
                 with self.lock:
-                    self.session.observe(features, 1 if response == "yes" else 0)
+                    self._condition_verdict(features, obs, extra)
+            else:
+                self.log.append(record)
         elif typ == "route-request":
             features = event.get("features") or {}
             with self.lock:

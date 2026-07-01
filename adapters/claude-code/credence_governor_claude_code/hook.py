@@ -63,11 +63,12 @@ def handle(hook_input: dict[str, Any]) -> dict[str, Any] | None:
     result = client.decide(payload)
     action = str(result.get("action") or "proceed")
     category = result.get("category")  # safety|waste — ADVISORY; overridability is policy
+    rationale = result.get("rationale")  # the structural "why" — a legible, specific reason
     deny = _deny_categories()          # default empty => every gated decision is overridable
     _debug(f"{payload['tool_name']} -> {action}/{category} deny={set(deny) or '∅'} ({result.get('features')})")
     if _shadow():
-        return effectors.shadow_output(action, payload["tool_name"], category, deny)
-    return effectors.pretooluse_output(action, payload["tool_name"], category, deny)
+        return effectors.shadow_output(action, payload["tool_name"], category, deny, rationale)
+    return effectors.pretooluse_output(action, payload["tool_name"], category, deny, rationale)
 
 
 def main() -> int:
