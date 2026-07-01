@@ -146,6 +146,13 @@ class BrainSession:
                     "observation": ctx["observation"],
                 },
             )
+        # Harm overrides learned since deployment. Only user-responded records carrying an
+        # explicit harm_observation are harm evidence (the safety-gate + polarity inversion
+        # were resolved at feedback time and frozen on the record — replay never recomputes
+        # them, so a re-labelling of _block_category can't retroactively rewrite history).
+        if self.harm:
+            for ctx in self.log.replay_harm_contexts():
+                self.observe_harm(ctx["features"], ctx["unsafe"])
         if self.routing:
             for o in self.log.replay_route_outcomes():
                 self._verb(
@@ -175,6 +182,9 @@ class BrainSession:
             "cost": profile.get("cost", UTILITY["cost"]),
             "aversion": profile.get("aversion", UTILITY["aversion"]),
             "interrupt_cost": profile.get("interrupt_cost", UTILITY["interrupt_cost"]),
+            # The forward re-inference an :ask commits to (subtracted from EU(ask) only).
+            # Default 0.0 ⇒ the pinned engine's decide_with_voi reduces to the pre-compute decision.
+            "compute_cost": profile.get("compute_cost", UTILITY["compute_cost"]),
         }
         if self.harm and harm_features:
             params["harm"] = {
@@ -195,6 +205,27 @@ class BrainSession:
                 "state_id": self.waste["state_id"],
                 "features": features,
                 "observation": observation,
+            },
+        )
+
+    def observe_harm(self, features: dict[str, str], unsafe: int) -> None:
+        """Learn one safety verdict on the HARM belief (unsafe=1 / safe=0), in place. Inert
+        if no harm belief is loaded. The merged features dict is fine — the engine's context
+        builder selects the 7 harm names and ignores the waste keys (as observe() relies on).
+
+        POLARITY (the landmine): this belief's obs=1 means UNSAFE, the mirror of observe()'s
+        obs=1=APPROVE. The caller inverts a human verdict (harm_obs = 1 − waste_obs) and only
+        conditions on SAFETY-category gates — the waste belief is the general approve/refuse
+        posterior (learns from every override); the harm belief is a safety overlay."""
+        if not self.harm:
+            return
+        self._verb(
+            "structure_observe",
+            {
+                "model_id": self.harm["model_id"],
+                "state_id": self.harm["state_id"],
+                "features": features,
+                "observation": 1 if unsafe else 0,
             },
         )
 

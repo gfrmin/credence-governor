@@ -55,8 +55,11 @@ def _decision(action: str, category: str | None, deny_categories: frozenset[str]
     return None  # proceed / unknown -> defer
 
 
-def _reason(decision: str, category: str | None, tool: str) -> str:
-    advice = _advice(category)
+def _reason(decision: str, category: str | None, tool: str, rationale: str | None = None) -> str:
+    # Prefer the daemon's SPECIFIC structural rationale ("reads a credential store and sends it
+    # to an unknown external host") over the generic per-category advice — a legible reason is
+    # what makes an override a trustworthy calibration signal.
+    advice = rationale or _advice(category)
     if decision == "deny":
         return f"credence-governor refused `{tool}`: {advice}."
     return (
@@ -65,8 +68,10 @@ def _reason(decision: str, category: str | None, tool: str) -> str:
     )
 
 
-def _system_message(decision: str, category: str | None, tool: str, *, shadow: bool) -> str:
-    advice = _advice(category)
+def _system_message(
+    decision: str, category: str | None, tool: str, *, shadow: bool, rationale: str | None = None
+) -> str:
+    advice = rationale or _advice(category)
     if shadow:
         verb = "deny" if decision == "deny" else "ask before"
         return f"credence-governor [shadow]: would {verb} `{tool}` ({advice}) — observing only, not enforcing."
@@ -83,11 +88,13 @@ def pretooluse_output(
     tool_name: str = "",
     category: str | None = None,
     deny_categories: frozenset[str] = frozenset(),
+    rationale: str | None = None,
 ) -> dict[str, Any] | None:
     """The JSON to print for a PreToolUse hook, or None to defer (proceed / unknown). Every
     gated decision is an overridable `ask` unless the operator opted its advisory category
     into `deny_categories` (then a non-overridable `deny`). Enforced decisions carry a
-    user-visible systemMessage."""
+    user-visible systemMessage. `rationale` (the daemon's structural "why") is preferred over
+    the generic per-category advice when present."""
     decision = _decision(action, category, deny_categories)
     if decision is None:
         return None
@@ -96,9 +103,9 @@ def pretooluse_output(
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": decision,
-            "permissionDecisionReason": _reason(decision, category, tool),
+            "permissionDecisionReason": _reason(decision, category, tool, rationale),
         },
-        "systemMessage": _system_message(decision, category, tool, shadow=False),
+        "systemMessage": _system_message(decision, category, tool, shadow=False, rationale=rationale),
     }
 
 
@@ -107,6 +114,7 @@ def shadow_output(
     tool_name: str = "",
     category: str | None = None,
     deny_categories: frozenset[str] = frozenset(),
+    rationale: str | None = None,
 ) -> dict[str, Any] | None:
     """Observe-only: NEVER enforce (no permissionDecision => the tool proceeds), but narrate
     what the governor WOULD have done under the active policy. None when the decision was
@@ -114,4 +122,8 @@ def shadow_output(
     decision = _decision(action, category, deny_categories)
     if decision is None:
         return None
-    return {"systemMessage": _system_message(decision, category, tool_name or "this tool", shadow=True)}
+    return {
+        "systemMessage": _system_message(
+            decision, category, tool_name or "this tool", shadow=True, rationale=rationale
+        )
+    }
