@@ -41,9 +41,19 @@ __all__ = [
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
 
-# The published engine image. Single source of truth: used by the zero-config
-# container path AND quoted in the no-engine error so the hint is copy-pasteable.
-DEFAULT_SKIN_IMAGE = "ghcr.io/gfrmin/credence-skin:latest"
+# The published engine image, DIGEST-PINNED for a reproducible "current version" (a bare
+# `:latest` silently drifts across restarts). This is the multi-arch INDEX digest of the
+# current published `:latest` (== `:master`) resolved 2026-07-01; docker/podman resolve it
+# to the host platform. Single source of truth: the zero-config container path + the copy-pasteable
+# no-engine hint. Operators override per-deployment via CREDENCE_SKIN_IMAGE /
+# CREDENCE_SKIN_COMMAND. To BUMP (re-resolve the current index digest):
+#   T=$(curl -s 'https://ghcr.io/token?scope=repository:gfrmin/credence-skin:pull' | jq -r .token)
+#   curl -sI -H 'Accept: application/vnd.oci.image.index.v1+json' -H "Authorization: Bearer $T" \
+#     https://ghcr.io/v2/gfrmin/credence-skin/manifests/latest | grep -i docker-content-digest
+DEFAULT_SKIN_IMAGE = (
+    "ghcr.io/gfrmin/credence-skin"
+    "@sha256:64339fb63a455c1eac62091337c8a2ac637e13227af82bb81320c3321055c2c3"
+)
 
 
 def _stdout(msg: str) -> None:
@@ -209,6 +219,11 @@ def run() -> None:
             "(proceed ungoverned) until ready."
         )
         session.boot()
+        eng = session.engine or {}
+        _stdout(
+            f"credence-governor: engine ready — version {eng.get('version')} "
+            f"protocol {eng.get('protocol')} ({len(eng.get('methods') or [])} verbs)"
+        )
         daemon.ready.set()  # engine up → answer real decisions
         _print_banner(host, port, brain_dir, log_path, _stdout)
         stop = threading.Event()
