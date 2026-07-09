@@ -6,12 +6,14 @@ Claude Code settings.json.
     credence-governor-cc-install --path X    # -> X
     credence-governor-cc-install --uninstall
 
-Registers TWO hooks (the pip-path equivalent of the plugin's hooks/hooks.json):
-  • PreToolUse  → credence-governor-claude-code      (gates each tool call)
+Registers THREE hooks (the pip-path equivalent of the plugin's hooks/hooks.json):
+  • PreToolUse   → credence-governor-claude-code      (gates each tool call)
+  • PostToolUse  → credence-governor-claude-code      (posts the measured outcome)
   • SessionStart → credence-governor-cc-session-start (warns if the daemon is down)
 
-Existing settings are preserved; we only touch hooks.PreToolUse / hooks.SessionStart,
-and dedupe by command.
+The same command serves PreToolUse and PostToolUse — it dispatches on hook_event_name.
+Existing settings are preserved; we only touch hooks.PreToolUse / hooks.PostToolUse /
+hooks.SessionStart, and dedupe by command.
 """
 
 from __future__ import annotations
@@ -75,12 +77,14 @@ def _remove_event(settings: dict[str, Any], event: str, command: str) -> None:
 
 def add(settings: dict[str, Any], command: str = HOOK_COMMAND) -> dict[str, Any]:
     _add_event(settings, "PreToolUse", command, _MATCHER)
+    _add_event(settings, "PostToolUse", command, _MATCHER)
     _add_event(settings, "SessionStart", SESSION_START_COMMAND, None)
     return settings
 
 
 def remove(settings: dict[str, Any], command: str = HOOK_COMMAND) -> dict[str, Any]:
     _remove_event(settings, "PreToolUse", command)
+    _remove_event(settings, "PostToolUse", command)
     _remove_event(settings, "SessionStart", SESSION_START_COMMAND)
     return settings
 
@@ -106,7 +110,7 @@ def main() -> int:
     settings = remove(settings, args.command) if args.uninstall else add(settings, args.command)
     _save(path, settings)
     verb = "removed from" if args.uninstall else "installed into"
-    sys.stdout.write(f"credence-governor hooks (PreToolUse + SessionStart) {verb} {path}\n")
+    sys.stdout.write(f"credence-governor hooks (PreToolUse + PostToolUse + SessionStart) {verb} {path}\n")
     return 0
 
 

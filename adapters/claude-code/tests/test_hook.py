@@ -51,8 +51,11 @@ def test_shadow_proceed_is_silent(monkeypatch):
     assert hook.handle({"hook_event_name": "PreToolUse"}) is None
 
 
-def test_non_pretooluse_defers(monkeypatch):
-    assert hook.handle({"hook_event_name": "PostToolUse"}) is None
+def test_unhandled_event_defers(monkeypatch):
+    # Events other than PreToolUse / PostToolUse (SessionStart, UserPromptSubmit, …) defer
+    # with no side effects — no decide, no stash, no result post.
+    assert hook.handle({"hook_event_name": "UserPromptSubmit"}) is None
+    assert hook.handle({}) is None
 
 
 def test_waste_category_makes_block_overridable(monkeypatch):
