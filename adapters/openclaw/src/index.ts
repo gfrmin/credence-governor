@@ -68,6 +68,18 @@ function newEventId(): string {
   return `evt_${randomUUID().slice(0, 12)}`;
 }
 
+// Cap the correlation maps (toolCallId→governance eventId, session→last governance eventId)
+// so a long run — or a tool call that never completes — can't grow them without bound. When
+// full, the oldest entry is evicted (a Map preserves insertion order).
+const MAX_CORRELATION_ENTRIES = 1024;
+function rememberBounded<K, V>(map: Map<K, V>, key: K, value: V): void {
+  map.set(key, value);
+  if (map.size > MAX_CORRELATION_ENTRIES) {
+    const oldest = map.keys().next().value as K | undefined;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+}
+
 // ── startup daemon health-check ──────────────────────────────────────────────────
 // Proactive: at plugin load, tell the operator if the daemon is down (governance and
 // routing are a silent fail-open no-op without it) with the exact fix — and, only if
@@ -345,6 +357,14 @@ export function createGovernor(
   // and are dropped.
   const awaiters = new Map<string, (sig: SignalEnvelope | undefined) => void>();
 
+  // Correlate a tool's completion + a turn's cost back to the GOVERNANCE decision they
+  // followed. beforeToolCall remembers its eventId under the tool-call id and the session;
+  // afterToolCall pops the tool-call id → the governance eventId (so the daemon links the
+  // OUTCOME to the decision, not to the tool-call id); llmOutput reads the session's most
+  // recent governance eventId. Both bounded (rememberBounded) so a long run can't leak.
+  const govEventByToolCall = new Map<string, string>();
+  const lastGovEventBySession = new Map<string, string>();
+
   const sse = client.connectSignalsStream((sig) => {
     const resolve = awaiters.get(sig.in_response_to);
     if (resolve) resolve(sig);
@@ -378,7 +398,15 @@ export function createGovernor(
   ): Promise<BeforeToolCallResult | undefined> {
     const eventId = newEventId();
     const t0 = Date.now();
+    const sid = ctx.sessionId ?? ctx.sessionKey ?? "";
     const signalPromise = awaitSignal(eventId);
+
+    // Remember this governance decision so the coming tool-completion (by tool-call id) and
+    // the turn's cost (by session) can correlate back to it. Set before the post so it holds
+    // even on a fail-open path; the daemon only records an outcome when the eventId matches a
+    // logged proposal, so an unlogged (failed-post) decision correlates to nothing.
+    if (event.toolCallId) rememberBounded(govEventByToolCall, event.toolCallId, eventId);
+    if (sid) rememberBounded(lastGovEventBySession, sid, eventId);
 
     // Build the neutral decision request (tool + input + prior session history) and let
     // the daemon extract features/taint server-side. The proposed call is excluded from
@@ -387,7 +415,7 @@ export function createGovernor(
     const post = await client.postSensor({
       event_type: "tool-proposed",
       event_id: eventId,
-      session_id: ctx.sessionId ?? ctx.sessionKey ?? "",
+      session_id: sid,
       timestamp: new Date().toISOString(),
       // The neutral event the daemon extracts from (tool-name / repetition / taint all
       // derive from these). `input` reaches the daemon transiently for extraction; it is
@@ -457,7 +485,7 @@ export function createGovernor(
           event_type: "counterfactual-decision",
           event_id: newEventId(),
           in_response_to: eventId,
-          session_id: ctx.sessionId ?? ctx.sessionKey ?? "",
+          session_id: sid,
           timestamp: new Date().toISOString(),
           effector: sig.effector,
           tool_name: event.toolName,
@@ -526,17 +554,28 @@ export function createGovernor(
     // session buffer so the daemon flags a later sink carrying its tokens (causal — only
     // results seen BEFORE a call can taint it; the daemon replays the buffer in order).
     session.recordResult(event, ctx);
-    // Correlate by the stable toolCallId (tools run in parallel).
+    // Correlate the completion to the GOVERNANCE decision it followed: the eventId
+    // beforeToolCall remembered under this tool-call id. Fall back to the tool-call id when
+    // no decision was seen for it (a tool that skipped the gate) — the daemon then records no
+    // outcome (it links only to a logged proposal). Pop so the map drains as calls complete.
+    const toolCallId = event.toolCallId ?? "";
+    const inResponseTo = (toolCallId && govEventByToolCall.get(toolCallId)) || toolCallId;
+    if (toolCallId) govEventByToolCall.delete(toolCallId);
+    const completed = event.error == null;
+    const latencyS = event.durationMs != null ? event.durationMs / 1000 : null;
     await client.postSensor({
       event_type: "tool-completed",
       event_id: newEventId(),
-      in_response_to: event.toolCallId ?? "",
+      in_response_to: inResponseTo,
       // session_id lets the daemon credit this outcome to the turn's routed model
-      // (online routing learning). The governance path correlates by toolCallId, not this.
+      // (online routing learning), correlated by session, not by in_response_to.
       session_id: ctx.sessionId ?? ctx.sessionKey ?? "",
       timestamp: new Date().toISOString(),
+      // Top-level measured observables (mirroring outcome.*) so the event is self-describing.
+      completed,
+      latency_s: latencyS,
       outcome: {
-        success: event.error == null,
+        success: completed,
         duration_ms: event.durationMs ?? null,
         result_summary: null,
         error: event.error ?? null,
@@ -549,10 +588,15 @@ export function createGovernor(
     ctx: ToolContext,
   ): Promise<void> {
     const tc = computeTurnCost(event, priceTable);
-    await client.postSensor({
+    const sid = ctx.sessionId ?? event.sessionId ?? "";
+    // Attach the session's most recent governance eventId when we know it, so a turn's cost
+    // can be joined to the decision that turn belongs to. Session-only when unknown (a cost
+    // event before any governed tool call) — never invented.
+    const govEventId = sid ? lastGovEventBySession.get(sid) : undefined;
+    const post: Record<string, unknown> = {
       event_type: "turn-cost",
       event_id: newEventId(),
-      session_id: ctx.sessionId ?? event.sessionId ?? "",
+      session_id: sid,
       timestamp: new Date().toISOString(),
       usd: tc.usd,
       total_tokens: tc.total_tokens,
@@ -561,13 +605,17 @@ export function createGovernor(
       cache_read: tc.cache_read,
       cache_write: tc.cache_write,
       model: tc.model,
-    });
+    };
+    if (govEventId) post.in_response_to = govEventId;
+    await client.postSensor(post);
   }
 
   function cleanup(): void {
     sse.close();
     for (const resolve of awaiters.values()) resolve(undefined);
     awaiters.clear();
+    govEventByToolCall.clear();
+    lastGovEventBySession.clear();
   }
 
   return {
