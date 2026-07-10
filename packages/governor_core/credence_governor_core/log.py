@@ -78,6 +78,63 @@ class ObservationLog:
             out.append({"features": features, "unsafe": int(r["harm_observation"])})
         return out
 
+    # outcome records rank by source: grounding sees session continuation (the
+    # acceptance signal); openclaw saw the completion in-process; a shadow-mode
+    # result-hook's completed=true is universal (everything executed) and so
+    # carries the least acceptance information. Unknown sources are not
+    # evidence-grade and are skipped.
+    _OUTCOME_SOURCE_RANK = {"grounding": 3, "openclaw": 2, "result-hook": 1}
+
+    @staticmethod
+    def _outcome_good_bit(record: dict[str, Any]) -> int | None:
+        """The latent outcome-evidence bit: 0 iff reverted, 1 iff completed
+        and not reverted, None otherwise — ambiguous (incl. completed=False
+        without revert evidence) is NOT evidence and is skipped."""
+        if record.get("reverted") is True:
+            return 0
+        if record.get("completed") is True:
+            return 1
+        return None
+
+    def replay_outcome_contexts(self) -> list[dict[str, Any]]:
+        """(event_id, features, good) triples for latent outcome replay: per
+        gated event_id ONE representative outcome record — source precedence
+        grounding > openclaw > result-hook, last record within the winning
+        source — mapped to the good-bit (see _outcome_good_bit). Events whose
+        record maps to no bit, or whose tool-proposed features are missing,
+        are skipped. Output ordered by each event's FIRST outcome record's
+        arrival position (replay order == arrival order, 8.2)."""
+        records = self.read()
+        features_by_id: dict[str, dict[str, str]] = {}
+        for r in records:
+            if r.get("event_type") == "tool-proposed" and isinstance(r.get("event_id"), str) and r.get("features"):
+                features_by_id[r["event_id"]] = r["features"]
+        chosen: dict[str, tuple[int, dict[str, Any]]] = {}
+        first_pos: dict[str, int] = {}
+        for i, r in enumerate(records):
+            if r.get("event_type") != "outcome":
+                continue
+            eid = r.get("in_response_to")
+            if not isinstance(eid, str):
+                continue
+            rank = self._OUTCOME_SOURCE_RANK.get(str(r.get("source")), 0)
+            if rank == 0:
+                continue
+            first_pos.setdefault(eid, i)
+            prev = chosen.get(eid)
+            if prev is None or rank >= prev[0]:
+                chosen[eid] = (rank, r)
+        out: list[dict[str, Any]] = []
+        for eid in sorted(chosen, key=lambda e: first_pos[e]):
+            features = features_by_id.get(eid)
+            if features is None:
+                continue
+            good = self._outcome_good_bit(chosen[eid][1])
+            if good is None:
+                continue
+            out.append({"event_id": eid, "features": features, "good": good})
+        return out
+
     def replay_route_outcomes(self) -> list[dict[str, Any]]:
         """(model_id, features, success, human?) for routing replay — route-outcome events."""
         out: list[dict[str, Any]] = []
