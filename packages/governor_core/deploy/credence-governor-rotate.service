@@ -1,0 +1,9 @@
+[Unit]
+Description=Credence Governor raw-capture retention: ground, rotate, compress, prune (R-D16)
+Documentation=https://github.com/gfrmin/credence-governor/blob/master/docs/RETENTION.md
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/credence-governor-rotate
+# Grounding a large capture can take a while; compression is CPU-bound.
+Nice=10
