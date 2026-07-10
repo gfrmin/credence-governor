@@ -19,6 +19,7 @@ import json
 import queue
 import threading
 import uuid
+from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from typing import Any, Callable
@@ -30,6 +31,7 @@ from .log import ObservationLog
 from .safety import extract_harm
 from .schema import event_and_session_from_payload
 from .session import BrainSession
+from .shadow import MembraneShadow
 
 
 def data_dir() -> str:
@@ -254,6 +256,7 @@ class Daemon:
         engine_lock: threading.Lock,
         logline: Callable[[str], None] = lambda m: None,
         capture: RawCaptureLog | None = None,
+        shadow: MembraneShadow | None = None,
     ):
         self.session = session
         self.log = log
@@ -262,6 +265,19 @@ class Daemon:
         # Opt-in raw-event capture (None when disabled). Non-causal — a re-extractable
         # training corpus, never read back into a belief.
         self.capture = capture
+        # The membrane shadow (None when disabled): every decide/verdict/outcome
+        # is mirrored to it AFTER the primary path completes its own work. Its
+        # submit_* surface is enqueue-only and never raises by contract; the
+        # _shadow_* wrappers below add defense-in-depth, because an escaped
+        # exception here would be caught by the handler's fail-open and flip an
+        # already-computed block/ask into proceed.
+        self.shadow = shadow
+        # decide-time features by event_id, bounded — the hot-path source for
+        # the shadow's outcome joins (/result fires per tool call; re-reading
+        # the whole log there would be O(log) per call). Misses (e.g. an
+        # outcome for a pre-restart event) fall back to the log read.
+        self._recent_features: OrderedDict[str, dict[str, str]] = OrderedDict()
+        self._feat_cache_lock = threading.Lock()
         # Set once the engine has booted. The server binds + serves BEFORE boot (so a
         # duplicate daemon fails fast on EADDRINUSE instead of booting a second engine);
         # until this flips, /ready, /decide and /sensor answer a fast 503 (fail-open),
@@ -284,6 +300,57 @@ class Daemon:
         # hard-vs-overridable LABEL needs no separate enforcement pass (M4 absorbed M3's
         # `_enforcement_view`): one extraction feeds the posterior AND the label.
         return {**extract_features(event, session), **extract_harm(event, session)}
+
+    # ── the shadow mirror (telemetry-only; never touches the response path) ──
+    def _remember_features(self, event_id: str, features: dict[str, str]) -> None:
+        with self._feat_cache_lock:
+            self._recent_features[event_id] = features
+            while len(self._recent_features) > 4096:
+                self._recent_features.popitem(last=False)
+
+    def _shadow_decide(self, event_id: str, features: dict[str, str],
+                       profile: dict[str, float] | None) -> None:
+        if self.shadow is None:
+            return
+        try:
+            self.shadow.submit_decide(event_id, features, profile)
+        except Exception as err:  # noqa: BLE001 — shadow telemetry must never break a decision
+            self.logline(f"credence-governor: shadow decide mirror failed (non-fatal): {err}")
+
+    def _shadow_verdict(self, features: dict[str, str], obs: int) -> None:
+        """Mirror one WASTE verdict. harm_observation is never forwarded —
+        epoch 1 keeps harm on the Julia engine (the shadow's observe_harm is
+        inert anyway)."""
+        if self.shadow is None:
+            return
+        try:
+            self.shadow.submit_verdict(features, obs)
+        except Exception as err:  # noqa: BLE001
+            self.logline(f"credence-governor: shadow verdict mirror failed (non-fatal): {err}")
+
+    def _shadow_outcome(self, record: dict[str, Any]) -> None:
+        """Mirror one just-written outcome record as outcome evidence: the
+        good-bit rule (0 iff reverted, 1 iff completed and not reverted,
+        skip otherwise — ambiguous is not evidence), features joined from
+        the decide-time cache with the log read as the miss fallback."""
+        if self.shadow is None:
+            return
+        try:
+            eid = record.get("in_response_to")
+            if not isinstance(eid, str) or not eid:
+                return
+            good = ObservationLog._outcome_good_bit(record)
+            if good is None:
+                return
+            with self._feat_cache_lock:
+                features = self._recent_features.get(eid)
+            if features is None:
+                features = self._features_for_event(eid)
+            if features is None:
+                return
+            self.shadow.submit_outcome(eid, features, good)
+        except Exception as err:  # noqa: BLE001
+            self.logline(f"credence-governor: shadow outcome mirror failed (non-fatal): {err}")
 
     # ── SSE ──
     def _emit(self, signal: dict[str, Any]) -> None:
@@ -314,6 +381,10 @@ class Daemon:
             action = self.session.decide(features, features, payload.get("profile"))
         self.log.append({"event_type": "tool-proposed", "event_id": event_id, "features": features})
         self.log.append({"event_type": "decision", "in_response_to": event_id, "action": action})
+        # shadow AFTER the appends (the membrane-shadow record's join target
+        # exists) — enqueue-only, never in the response path.
+        self._remember_features(event_id, features)
+        self._shadow_decide(event_id, features, payload.get("profile"))
         # Capture the raw payload (when enabled) so a future extractor re-derives features
         # over this real traffic. Best-effort and absolutely non-fatal: this runs AFTER the
         # decision is computed, so ANY capture exception (not just OSError — a deeply nested
@@ -364,17 +435,17 @@ class Daemon:
         telemetry (no engine, no lock): safe during boot, replay-inert. Multiple outcomes per
         event_id are allowed (this result-time record plus a later grounding backfill)."""
         event_id = payload.get("event_id") or self._last_outcome_pending_event_id()
-        self.log.append(
-            _outcome_record(
-                event_id, "result-hook",
-                completed=payload.get("completed"),
-                latency_s=payload.get("latency_s"),
-                spend_usd=payload.get("spend_usd"),
-                reverted=payload.get("reverted"),
-                retries=payload.get("retries"),
-                error=payload.get("error"),
-            )
+        record = _outcome_record(
+            event_id, "result-hook",
+            completed=payload.get("completed"),
+            latency_s=payload.get("latency_s"),
+            spend_usd=payload.get("spend_usd"),
+            reverted=payload.get("reverted"),
+            retries=payload.get("retries"),
+            error=payload.get("error"),
         )
+        self.log.append(record)
+        self._shadow_outcome(record)
         return {"ok": True, "event_id": event_id}
 
     # ── explicit human feedback (Claude Code has no onResolution; close the loop here) ──
@@ -453,6 +524,8 @@ class Daemon:
         self.session.observe(features, obs)
         if extra.get("harm_observation") is not None:
             self.session.observe_harm(features, int(extra["harm_observation"]))
+        # mirror the WASTE verdict only (epoch 1: harm never reaches the shadow)
+        self._shadow_verdict(features, obs)
 
     def _harm_burst_duplicate(self, features: dict[str, str], verdict: int) -> bool:
         """True if the most recent CONDITIONED harm-observation on this exact harm-cell had the
@@ -490,6 +563,8 @@ class Daemon:
                 event_id, action, event.get("proposed_call"),
                 _rationale(features, _block_category(features)),
             )
+            self._remember_features(event_id, features)
+            self._shadow_decide(event_id, features, event.get("profile"))
         elif typ == "user-responded":
             original = str(event.get("in_response_to") or "")
             # Pop unconditionally so timeouts / other responses don't leak the entry;
@@ -546,14 +621,14 @@ class Daemon:
             if irt and irt in self._governance_event_ids():
                 dur = outcome.get("duration_ms")
                 latency_s = dur / 1000.0 if isinstance(dur, (int, float)) else None
-                self.log.append(
-                    _outcome_record(
-                        irt, "openclaw",
-                        completed=outcome.get("success"),
-                        latency_s=latency_s,
-                        error=outcome.get("error"),
-                    )
+                record = _outcome_record(
+                    irt, "openclaw",
+                    completed=outcome.get("success"),
+                    latency_s=latency_s,
+                    error=outcome.get("error"),
                 )
+                self.log.append(record)
+                self._shadow_outcome(record)
         else:
             # turn-cost / governance-latency / counterfactual-decision: telemetry — log only.
             self.log.append(dict(event))
@@ -586,7 +661,7 @@ class Daemon:
                     completed += 1
                 if r.get("reverted") is True:
                     reverted += 1
-        return {
+        out = {
             # Existing keys (unchanged — existing consumers/tests depend on them).
             "events": len(records),
             "decisions": decisions,
@@ -600,6 +675,9 @@ class Daemon:
             "completed": completed,
             "reverted": reverted,
         }
+        if self.shadow is not None:
+            out["membrane_shadow"] = self.shadow.stats()
+        return out
 
     # ── HTTP ──
     def _handler_class(self) -> type[BaseHTTPRequestHandler]:
