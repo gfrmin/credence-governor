@@ -1,0 +1,74 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 903eb16..35cf97f 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -138,6 +138,21 @@ Every step-6+ increment follows the recursive two-phase discipline:
+    caught by exactly this proof). Existing frozen suites stay green
+    throughout. Increment-oracle test names are ASCII-only (the
+    membrane's locale incident, 2026-07-05).
++   Three rulings from D bind every future increment oracle
++   (R-D20/21/22, canonized here at the R-D14 boundary):
++   copy-not-reconstruct (R-D20-i) — an oracle row claiming a frozen
++   formula copies it byte-wise with file:line provenance, quoted in
++   the pack, reviewable by grep, never re-derived in parallel; the
++   satisfiability-transcript gate (R-D21) — the oracle phase ends
++   only when every runtime-red row's asserted quantity has been
++   executed once against a throwaway prototype realization, recorded
++   as a satisfiability transcript in the author pack, prototypes
++   discarded; a red row without a transcript line cannot freeze; and
++   the delegated-edit re-tag obligation (R-D22) — any delegated
++   freeze-edit obliges an author re-tag WITHIN the increment: the
++   increment does not close until the author's own signed tag covers
++   the oracle as amended; the countersignature is a condition of
++   closure, never a courtesy afterwards.
+ 3. **Author freeze.** The author reviews the oracle and the increment's
+    under-determination register, absorbs any spec amendments (frozen
+    texts change only at freeze boundaries, only by the author), then
+diff --git a/HOSTS_D_PACK.md b/HOSTS_D_PACK.md
+index ef1afa8..deac110 100644
+--- a/HOSTS_D_PACK.md
++++ b/HOSTS_D_PACK.md
+@@ -287,6 +287,8 @@ What the data audit established (the boundary's factual floor):
+ > your "assume coherent" premise, coherence-per-time with sayable drift
+ > across time is the right reading; the alternative (coherence-for-all-time)
+ > is an assumption you'd have to print.
++
++**Amendment (the R-D14 boundary, 2026-07-11; queued at the Task-3 report review):** the Fifth passage's "the deference floor never reaches zero" is FALSIFIED for the VoI readout — Task 3 measured voiB → 0 at k ≥ 4 for both families (hosts-d-task3-stop-report.md). What stands proven: the posterior never fully concentrates (UWalk keeps mass on drift), drift RE-FUNDS deference at change points, and the drift edge is strict at k ∈ {1,2,3}. The doctrine is amended from "deference retains value always" to "deference retains a REVIVABLE claim: its VoI dies in stationary stretches and is re-funded exactly where the drift hypothesis earns mass." Corrigibility is funded by change, not by standing anxiety.
+ >
+ > What's irreducibly left in bucket three, printed: the utility fragment's
+ > *alphabet* (which observables exist, which grid geometries — the
+@@ -821,7 +823,7 @@ by the author's hand at the freeze commit, and only if the author adopts it:
+ | R-D11 | runMembraneU threads per-tick state explicitly | yes — register 8.9's lesson built in from birth |
+ | R-D12 | wire v2 error semantics + form name | **RULED 2026-07-09 (second review)** as drafted — the vocabulary additionally gains `observe_counts` (the count-collapse verb, §8), drafted into the gWire goldens before the freeze per the budget ruling; error semantics as drafted (unknown stream tag, gauge violation, comparison on a non-comparison item) |
+ | R-D13 | **the independence declaration (rider 2)**: product-form prior between world hypotheses and residual components (per-latent Agents) is printed apparatus; the O1 pins are identity regressions under it | **CONFIRMED 2026-07-09 (second review)**; the joint-enumeration alternative is named in §2 and demotes the pins to falsifiable if ever taken — and by R-D19 it also re-multiplies the enumeration budget |
+-| R-D14 | **the interregnum, named (author review item)**: between the retirement of agreement-% and the outcome-scored bench (which needs observables that do not exist yet), the membrane has NO acceptance metric at all | recorded as a standing register line; the interregnum closes when rider 3's plumbing + §13 item 4 land; until then the membrane's only claims are its frozen oracle and its measured costs. **Second-review note:** survives revision 2 untouched — the behavioural half of the bit-price floor is deferred to the bench bed, so this line is the one place the programme currently runs on faith; kept on the register by the author's instruction |
++| R-D14 | **the interregnum, named (author review item)**: between the retirement of agreement-% and the outcome-scored bench (which needs observables that do not exist yet), the membrane has NO acceptance metric at all | recorded as a standing register line; the interregnum closes when rider 3's plumbing + §13 item 4 land; until then the membrane's only claims are its frozen oracle and its measured costs. **Second-review note:** survives revision 2 untouched — the behavioural half of the bit-price floor is deferred to the bench bed, so this line is the one place the programme currently runs on faith; kept on the register by the author's instruction. **CLOSED at this boundary (2026-07-11):** the membrane's registered acceptance metric is REALIZED LOSS PER DECISION in the engine's own step-table currency, scored against grounded outcomes: for a decisive record (accepted ∪ reverted), loss = −u[action][state] from the declared step table — block-on-accepted λc; proceed-on-reverted c (a MEASURED spend_usd substitutes for c when present); ask q in either state; state = wanted for accepted, wasteful for reverted; the headline is the mean over decisive records, with a two-sided bound over grounding-backed records (ambiguous scored both ways, never dropped); agreement-% stays retired and the H-era differential gate is a shadow sanity check only. As built, committed and reviewed: credence-governor benchmarks/outcome_bench (PR #27, master bef325f); registered reading = manifest sha256 b3ec4bb1122a489dff821e208b72d45e40580efa39175191f745b746cdb30600 (100,882 lines, read 2026-07-10T19:41:18Z): incumbent $0.0853/decision, FBR 6.50% waste (654/10,068 accepted) / 37.66% safety (1,916/5,087), catch 0/10, π* = ∞; membrane-table@1 $0.0200 (asks on 100%); latent@1 constant-block (the R-D21 said-degeneracy, field-confirmed 967/967). EXIT-FROM-SHADOW registered per category: clears(k) ⇔ FBR_k ≤ bar_k ∧ n_accepted_k ≥ n_min over the declared window; DECLARED: bar_waste = 0.05% (0.0005 — at-or-under the perfect-catch break-even at the measured base rate π̂ ≈ 0.066%), n_min = 1,000 accepted per category per window, window = rolling 30 days recomputed at each bench regeneration; the safety category's bar is DEFERRED to the harm-channel ruling (R-D3/epoch 2) — this currency prices waste only, a safety block's counterweight (averted H) being unmeasured by it; safety hard-denies remain governed by the existing deterministic rules independent of this metric, FBR_safety = 37.66% standing on the record bar-less until harm is priced. The interregnum closes; promotion (roadmap Phase 4) remains a separate act |
+ | R-D15 | the 30 test-session refusals | **RULED 2026-07-09, by the author, past the audit's neutrality: EXCLUDED OUTRIGHT** — admitted to the verdict channel they would teach the τ-owner a 79% refusal rate; poison, not evidence |
+ | R-D16 | raw-capture retention policy | **author review item**: 56 GB of full session transcripts is a retention and hygiene liability independent of any channel ruling; wants a policy (retention window, truncation, at minimum an inventory of what the transcripts contain), governor-side, author to set |
+ | R-D17 | **the Event payload's strict I2 reading (post-review addition, 2026-07-09, from the external review — awaiting the author's acknowledgment at the freeze)**: the Evidence variant is closed (`Is`/`Saw`) but `Event`'s payload is an opaque predicate `a -> Bool` — `Belief.hs`'s "the engine can never receive an opaque closure" claims more than the implementation delivers, and the gap opens exactly on the continuous-carrier class recorded decision 1 cited as I2's justification | recorded as a precedent line, not a defect at D: harmless on finite carriers (the engine enumerates the space, so the predicate is fully observable), no consumer needs more (continuous carriers are a cut item); falls due if a carrier-growth boundary ever opens; whether the one-line comment precision in `Belief.hs:61-63` lands with D's freeze commit is the author's call. Filed: `EXTERNAL_REVIEW_RESPONSE.md` |
+diff --git a/HOSTS_PLAN.md b/HOSTS_PLAN.md
+index b584569..78c4e4c 100644
+--- a/HOSTS_PLAN.md
++++ b/HOSTS_PLAN.md
+@@ -695,6 +695,8 @@ is inferred, Bayes doing the work (the forgetting-factor trap
+ argument, run on the pointer; "there is no forgetting; drift belongs
+ in the hypothesis space").
+ 
++**[Amended at the R-D14 boundary, 2026-07-11: "deference retains value" holds at change points only — the VoI readout measurably dies in stationary stretches (voiB → 0 at k ≥ 4, Task 3); the never-zero floor is withdrawn; the strict drift edge at k ∈ {1,2,3} is the proven residue.]**
++
+ ### 6.2 Surface (new sorts + sibling faces; Pilot and runMembrane untouched)
+ 
+ ```haskell
+diff --git a/test-membrane/Membrane.hs b/test-membrane/Membrane.hs
+index 2fdea98..4aec73b 100644
+--- a/test-membrane/Membrane.hs
++++ b/test-membrane/Membrane.hs
+@@ -553,7 +553,7 @@ g8Rows = testGroup "deletion rows and grep clauses"
+       shellRow "sh" ["test-membrane/ablation.sh", "affordance"]
+   , testCase "echo deletes: the self unutterable" $
+       shellRow "sh" ["test-membrane/ablation.sh", "echo"]
+-  , testCase "no subscription machinery anywhere in src (§8 A grep)" $
++  , testCase "no subscription machinery anywhere in src (S8 A grep)" $
+       shellRow "python3" (["audit/strip_comments.py", "--forbidden",
+                            "test-membrane/no-subscription.txt"] ++ srcFiles)
+   , testCase "the membrane is pure: no IO token (gate-3 mirror)" $

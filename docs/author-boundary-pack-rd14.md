@@ -43,12 +43,21 @@ the standing text):
 > constant-block (the R-D21 said-degeneracy, field-confirmed 967/967).
 > EXIT-FROM-SHADOW is registered per category:
 > clears(k) ⇔ FBR_k ≤ bar_k ∧ n_accepted_k ≥ n_min over the declared
-> window. Declared values: bar_waste = ☐ ; n_min = ☐ ; window = ☐ .
-> The safety category's bar is ☐ (see item 2, option B). The interregnum
-> line closes; the membrane's field performance is measurable by this
+> window. Declared values (accepted by the author 2026-07-11):
+> bar_waste = 0.05% (0.0005 — at-or-under the perfect-catch break-even at
+> the measured base rate π̂ ≈ 0.066%: blocking must be net-positive in
+> this currency, not merely better than the incumbent); n_min = 1,000
+> accepted per category per window; window = rolling 30 days, recomputed
+> at each bench regeneration. The safety category's bar is DEFERRED to
+> the harm-channel ruling (R-D3 / epoch 2): this currency prices waste
+> only — a safety block's counterweight (averted H) is unmeasured by it;
+> safety hard-denies remain governed by the existing deterministic rules
+> independent of this metric, and the measured FBR_safety (37.66%) stands
+> on the record bar-less until harm is priced. The interregnum line
+> closes; the membrane's field performance is measurable by this
 > registered standard. Promotion (roadmap Phase 4) is a separate act.
 
-## 2. The bar values — analysis and recommendation (the author decides)
+## 2. The bar values — analysis and recommendation (ACCEPTED by the author, 2026-07-11)
 
 **The break-even fact in the registered currency** (all quantities from the
 committed reading): a block saves c=$0.50 when it lands on a wasteful call
@@ -160,8 +169,12 @@ anchor moves).
    100% before starting (verified 2026-07-11 by the builder: clean, all
    OK).
 2. Apply the edits: HOSTS_D_PACK.md (items 1 + 3a), HOSTS_PLAN.md (item
-   3b), CLAUDE.md (item 4), test-membrane/Membrane.hs:556 (item 5). Fill
-   the ☐s in item 1 (values from item 2 or your own).
+   3b), CLAUDE.md (item 4), test-membrane/Membrane.hs:556 (item 5). All
+   values are final (item 2 accepted 2026-07-11) — nothing left to
+   decide. A builder-prepared patch (`rd14-boundary.patch`, verified to
+   apply cleanly against the frozen tree) accompanies this pack: review
+   it, `git apply rd14-boundary.patch` in your shell, inspect `git diff`,
+   then proceed — or apply the edits by hand from the texts above.
 3. Re-run the gates: `export PATH="$HOME/.ghcup/bin:$PATH"` then
    `cabal test all` (the locale rename must stay green).
 4. Re-sign the manifest over the same frozen set:
