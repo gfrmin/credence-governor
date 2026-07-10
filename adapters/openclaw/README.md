@@ -172,6 +172,30 @@ the daemon extracts. This is the same neutral shape the Claude Code adapter buil
 its transcript — one extractor, every harness (DRY). Routing's `prompt-length` feature
 is the one exception that stays client-side (it has no cross-harness analogue).
 
+## Outcome capture
+
+Every governed tool call gets a **measured aftermath** linked back to the decision that
+gated it. `after_tool_call` posts `tool-completed` with `in_response_to` set to the
+**governance decision's eventId** (the one `before_tool_call` obtained — not the raw
+tool-call id), plus the observables `completed` (did it run without error) and `latency_s`.
+The daemon records these as an `outcome` record keyed by that eventId, so a decision can be
+joined to what happened after it. Per-turn cost (`llm_output` → `turn-cost`) is likewise
+tagged with the session's most recent governance eventId when one is known.
+
+These are **measured observables, never good/bad labels** — telemetry the daemon's `/report`
+tallies (`total_usd`, `outcome_records`, `completed`, `reverted`), never replayed into a
+belief. What to enable:
+
+| want | set |
+|---|---|
+| outcomes recorded | nothing — on by default; recorded even in `shadowMode` (the decision was still logged) |
+| per-turn **cost** attached | `hooks.allowConversationAccess: true` (the `llm_output` hook needs it) |
+| accurate USD | `pricing` (per-model USD/Mtok) — otherwise unpriced models record `usd: null` |
+
+The daemon's Claude Code sibling captures the same shape through its `PostToolUse` hook, and
+a post-hoc structural grounding pass (`credence_governor_core.training.ground_capture`)
+backfills `reverted` / `retries` from replayed session transcripts.
+
 ## Known limitations (Move 1 / MVP-0)
 
 - `working-directory-relative` and `time-since-last-user-message` are best-effort

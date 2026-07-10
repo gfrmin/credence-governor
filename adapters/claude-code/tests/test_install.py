@@ -14,18 +14,21 @@ def _commands(settings, event):
     ]
 
 
-def test_add_registers_both_events():
+def test_add_registers_all_events():
     s = install.add({})
     assert install.HOOK_COMMAND in _commands(s, "PreToolUse")
+    assert install.HOOK_COMMAND in _commands(s, "PostToolUse")
     assert install.SESSION_START_COMMAND in _commands(s, "SessionStart")
-    # PreToolUse carries the all-tools matcher; SessionStart does not
+    # PreToolUse + PostToolUse carry the all-tools matcher; SessionStart does not
     assert s["hooks"]["PreToolUse"][0]["matcher"] == "*"
+    assert s["hooks"]["PostToolUse"][0]["matcher"] == "*"
     assert "matcher" not in s["hooks"]["SessionStart"][0]
 
 
 def test_add_is_idempotent():
     s = install.add(install.add({}))
     assert _commands(s, "PreToolUse").count(install.HOOK_COMMAND) == 1
+    assert _commands(s, "PostToolUse").count(install.HOOK_COMMAND) == 1
     assert _commands(s, "SessionStart").count(install.SESSION_START_COMMAND) == 1
 
 
@@ -38,7 +41,8 @@ def test_add_preserves_unrelated_settings():
     assert "other-tool" in pre and install.HOOK_COMMAND in pre
 
 
-def test_remove_clears_both():
+def test_remove_clears_all():
     s = install.remove(install.add({}))
     assert _commands(s, "PreToolUse") == []
+    assert _commands(s, "PostToolUse") == []
     assert _commands(s, "SessionStart") == []

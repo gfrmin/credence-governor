@@ -1,19 +1,21 @@
 """hook.py — the Claude Code subprocess-hook entry point.
 
-Registered as a `PreToolUse` hook (see install.py / settings.example.json). On each
-proposed tool call Claude Code pipes a JSON event on stdin; we translate it to the
-neutral wire shape, ask the governor daemon for a decision, and print a PreToolUse
-permission decision on stdout.
+Registered as `PreToolUse` + `PostToolUse` hooks (see install.py / settings.example.json).
 
-v1 gates PreToolUse only. PostToolUse / UserPromptSubmit are intentionally NOT wired:
-neither carries a clean approval label, and recording "the call completed" as belief
-evidence would be a second learning path (Invariant 1) — wrong, not just weak. Online
-ask-learning on Claude Code is an open design question (transcript-inference), so v1
-is observation-only: the warm-trained brain governs, the daemon logs every decision.
+PreToolUse: Claude Code pipes a proposed tool call as JSON on stdin; we translate it to the
+neutral wire shape, ask the governor daemon for a decision, and print a PreToolUse permission
+decision on stdout. We also stash the decide-time event_id keyed by the call's identity so the
+matching PostToolUse can correlate to it (Claude Code fires the two as separate subprocesses).
 
-Fail-open is absolute: any malformed input, daemon-down, timeout, or non-PreToolUse
-event prints nothing and exits 0, leaving the call to Claude Code's normal flow. The
-governor can add friction (deny / ask) but never removes the host's own safety.
+PostToolUse: we recover that event_id, measure the call's latency, read the completion status
+from the tool_response, and POST a MEASURED outcome to the daemon's /result — telemetry only,
+never a belief update (recording "the call completed" as approval evidence would be a second,
+wrong learning path, Invariant 1). The outcome is a measured observable, not a good/bad label.
+
+Fail-open is absolute: any malformed input, daemon-down, timeout, or unhandled event prints
+nothing and exits 0, leaving the call to Claude Code's normal flow. Result-posting is strictly
+best-effort — a stash miss or a down daemon is swallowed and the tool proceeds untouched. The
+governor can add friction (deny / ask) at PreToolUse but never removes the host's own safety.
 """
 
 from __future__ import annotations
@@ -21,9 +23,10 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from typing import Any
 
-from . import client, effectors, transcript
+from . import client, effectors, pending, transcript
 
 
 def _debug(msg: str) -> None:
@@ -51,16 +54,52 @@ def _read_stdin() -> dict[str, Any]:
     return json.loads(raw) if raw and raw.strip() else {}
 
 
-def handle(hook_input: dict[str, Any]) -> dict[str, Any] | None:
-    """Pure core: a PreToolUse hook payload -> the stdout JSON (or None to defer).
-    Raises on daemon failure so `main` can fail open around it."""
-    if (hook_input.get("hook_event_name") or "") != "PreToolUse":
-        return None  # v1 gates only PreToolUse
+def completed_from_tool_response(tool_response: Any) -> bool | None:
+    """Best-effort read of whether the tool completed without error. Claude Code exposes no
+    universal success flag on PostToolUse, so we inspect the common structural error indicators
+    and default to True (the tool ran) when none is present; None when there is no response body
+    at all (the outcome is genuinely unknown)."""
+    if tool_response is None:
+        return None
+    if isinstance(tool_response, dict):
+        if tool_response.get("is_error") is True or tool_response.get("isError") is True:
+            return False
+        if tool_response.get("error"):
+            return False
+        if tool_response.get("success") is False:
+            return False
+        if tool_response.get("interrupted") is True:
+            return False
+        return True
+    return True  # a plain string / other body ⇒ the tool produced a result
+
+
+def _stash_decision(hook_input: dict[str, Any], result: dict[str, Any]) -> None:
+    """Persist the decide-time event_id keyed by the call's identity so the matching
+    PostToolUse can correlate to it. No event_id (a fail-open 503 proceed) ⇒ nothing to
+    correlate. Best-effort: a stash failure must never break the already-computed decision."""
+    event_id = result.get("event_id")
+    if not event_id:
+        return
+    try:
+        pending.write_pending(
+            str(hook_input.get("session_id") or ""),
+            str(hook_input.get("tool_name") or ""),
+            hook_input.get("tool_input"),
+            str(event_id),
+            time.time(),
+        )
+    except Exception as err:  # noqa: BLE001 — the stash is telemetry; never break a decision
+        _debug(f"pending-stash write failed (non-fatal): {err}")
+
+
+def _handle_pretooluse(hook_input: dict[str, Any]) -> dict[str, Any] | None:
     payload = transcript.session_from_hook(hook_input)
     profile = os.environ.get("CREDENCE_GOVERNOR_PROFILE")
     if profile:
         payload["profile"] = profile
     result = client.decide(payload)
+    _stash_decision(hook_input, result)  # correlate the coming PostToolUse to this decision
     action = str(result.get("action") or "proceed")
     category = result.get("category")  # safety|waste — ADVISORY; overridability is policy
     rationale = result.get("rationale")  # the structural "why" — a legible, specific reason
@@ -69,6 +108,46 @@ def handle(hook_input: dict[str, Any]) -> dict[str, Any] | None:
     if _shadow():
         return effectors.shadow_output(action, payload["tool_name"], category, deny, rationale)
     return effectors.pretooluse_output(action, payload["tool_name"], category, deny, rationale)
+
+
+def _handle_posttooluse(hook_input: dict[str, Any]) -> None:
+    """Correlate the completed call to its PreToolUse decision and POST the measured outcome.
+    Always returns None (Claude Code proceeds); every step is best-effort telemetry — a stash
+    miss posts without an event_id (the daemon resolves the fallback), and a down daemon is
+    swallowed. Never blocks or fails the tool on a result-posting problem."""
+    try:
+        event_id, latency_s = pending.pop_pending(
+            str(hook_input.get("session_id") or ""),
+            str(hook_input.get("tool_name") or ""),
+            hook_input.get("tool_input"),
+            time.time(),
+        )
+    except Exception as err:  # noqa: BLE001 — telemetry correlation; failing open
+        _debug(f"pending-stash pop failed (non-fatal): {err}")
+        event_id, latency_s = None, None
+    payload: dict[str, Any] = {
+        "completed": completed_from_tool_response(hook_input.get("tool_response")),
+        "latency_s": latency_s,
+    }
+    if event_id:
+        payload["event_id"] = event_id
+    try:
+        client.post_result(payload)
+    except Exception as err:  # noqa: BLE001 — daemon down / timeout; never block the tool
+        _debug(f"/result post failed (non-fatal, failing open): {err}")
+    return None
+
+
+def handle(hook_input: dict[str, Any]) -> dict[str, Any] | None:
+    """Pure core: a hook payload -> the stdout JSON (or None to defer). PreToolUse may raise
+    on daemon failure so `main` can fail open around it; PostToolUse is best-effort and never
+    raises (it always defers with None)."""
+    name = hook_input.get("hook_event_name") or ""
+    if name == "PreToolUse":
+        return _handle_pretooluse(hook_input)
+    if name == "PostToolUse":
+        return _handle_posttooluse(hook_input)
+    return None  # any other event (SessionStart, UserPromptSubmit, …) defers
 
 
 def main() -> int:

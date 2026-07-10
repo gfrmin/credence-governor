@@ -52,3 +52,16 @@ def decide(payload: dict[str, Any]) -> dict[str, Any]:
     )
     with urllib.request.urlopen(req, timeout=timeout_s()) as resp:  # noqa: S310 (localhost daemon)
         return json.loads(resp.read().decode("utf-8"))
+
+
+def post_result(payload: dict[str, Any]) -> dict[str, Any]:
+    """POST /result with a measured outcome for a past decision. Raises on transport/HTTP
+    error — the PostToolUse caller swallows it (result-posting is best-effort telemetry and
+    must never block or fail a tool call)."""
+    url = base_url().rstrip("/") + "/result"
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data, headers={"content-type": "application/json"}, method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=timeout_s()) as resp:  # noqa: S310 (localhost daemon)
+        return json.loads(resp.read().decode("utf-8"))

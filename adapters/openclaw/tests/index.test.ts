@@ -248,31 +248,86 @@ test("shadowMode: proceed → no counterfactual-decision (nothing would have bee
   h.gov.cleanup();
 });
 
-test("after_tool_call: posts tool-completed correlated by toolCallId", async () => {
+test("after_tool_call: no prior decision for the tool-call id → falls back to toolCallId, carries measured observables", async () => {
   const h = harness();
   await h.gov.afterToolCall({ toolName: "bash", toolCallId: "tc1", params: {}, durationMs: 12 }, ctx);
   const tc = h.find("tool-completed") as
-    | { in_response_to: string; session_id: string; outcome: { success: boolean; duration_ms: number } }
+    | {
+        in_response_to: string; session_id: string; completed: boolean; latency_s: number;
+        outcome: { success: boolean; duration_ms: number };
+      }
     | undefined;
+  // No beforeToolCall registered tc1, so in_response_to falls back to the tool-call id (the
+  // daemon then records no outcome — it links only to a logged governance proposal).
   assert.equal(tc?.in_response_to, "tc1");
   // session_id lets the daemon credit this outcome to the turn's routed model (online routing).
   assert.equal(tc?.session_id, "s1");
+  assert.equal(tc?.completed, true);
+  assert.equal(tc?.latency_s, 0.012); // 12ms → seconds
   assert.equal(tc?.outcome.success, true);
   assert.equal(tc?.outcome.duration_ms, 12);
   h.gov.cleanup();
 });
 
-test("llm_output: posts turn-cost with reconstructed USD", async () => {
+test("after_tool_call: correlates to the GOVERNANCE eventId registered by beforeToolCall", async () => {
+  const h = harness();
+  const p = h.gov.beforeToolCall(ev("bash", { toolCallId: "tc1" }), ctx);
+  await flush();
+  const govId = h.lastProposedId(); // the governance decision's event_id
+  h.signal("proceed", govId);
+  await p;
+  await h.gov.afterToolCall({ toolName: "bash", toolCallId: "tc1", params: {}, durationMs: 2000 }, ctx);
+  const tc = h.find("tool-completed") as
+    | { in_response_to: string; completed: boolean; latency_s: number }
+    | undefined;
+  // in_response_to is now the GOVERNANCE eventId (not the tool-call id) — the daemon links the
+  // outcome to the decision.
+  assert.equal(tc?.in_response_to, govId);
+  assert.notEqual(tc?.in_response_to, "tc1");
+  assert.equal(tc?.completed, true);
+  assert.equal(tc?.latency_s, 2);
+  h.gov.cleanup();
+});
+
+test("after_tool_call: error → completed=false", async () => {
+  const h = harness();
+  await h.gov.afterToolCall(
+    { toolName: "bash", toolCallId: "tc9", params: {}, durationMs: 5, error: "boom" },
+    ctx,
+  );
+  const tc = h.find("tool-completed") as { completed: boolean; outcome: { success: boolean; error: string } } | undefined;
+  assert.equal(tc?.completed, false);
+  assert.equal(tc?.outcome.success, false);
+  assert.equal(tc?.outcome.error, "boom");
+  h.gov.cleanup();
+});
+
+test("llm_output: posts turn-cost with reconstructed USD; session-only when no prior governed call", async () => {
   const h = harness();
   await h.gov.llmOutput(
     { model: "claude-opus-4-8", usage: { input: 1_000_000, output: 1_000_000 } },
     ctx,
   );
-  const t = h.find("turn-cost") as { usd: number; total_tokens: number } | undefined;
+  const t = h.find("turn-cost") as { usd: number; total_tokens: number; in_response_to?: string } | undefined;
   // opus $5 in + $25 out per Mtok (verified 2026-06): 1M·5 + 1M·25 = $30 (was $90 at the
   // retired 15/75 pricing — corrected in cost.ts).
   assert.equal(t?.usd, 30);
   assert.equal(t?.total_tokens, 2_000_000);
+  // No governed tool call preceded this cost, so it stays session-only (never invented).
+  assert.equal(t?.in_response_to, undefined);
+  h.gov.cleanup();
+});
+
+test("llm_output: attaches in_response_to = the session's most recent governance eventId", async () => {
+  const h = harness();
+  const p = h.gov.beforeToolCall(ev("bash", { toolCallId: "tc1" }), ctx);
+  await flush();
+  const govId = h.lastProposedId();
+  h.signal("proceed", govId);
+  await p;
+  await h.gov.llmOutput({ model: "claude-opus-4-8", usage: { input: 10, output: 10 }, sessionId: "s1" }, ctx);
+  const t = h.find("turn-cost") as { in_response_to?: string } | undefined;
+  assert.equal(t?.in_response_to, govId);
   h.gov.cleanup();
 });
 

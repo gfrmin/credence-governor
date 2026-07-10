@@ -41,6 +41,25 @@ def _short_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
 
+# An `outcome` record links a MEASURED observable back to the decide-time decision it
+# followed (by in_response_to == the tool-proposed event_id). Every field is nullable and
+# several outcome records may share one event_id (a result-time record first, a grounding
+# backfill later). NON-CAUSAL like capture: outcomes are telemetry the report tallies, never
+# replayed into a belief (log.replay_* filter by event_type, so an `outcome` type is
+# replay-inert by construction). The fields are measured, never a good/bad judgement.
+_OUTCOME_FIELDS = ("completed", "latency_s", "spend_usd", "reverted", "retries", "error")
+
+
+def _outcome_record(in_response_to: str | None, source: str, **fields: Any) -> dict[str, Any]:
+    """One outcome record: the fixed shape with every observable defaulting to None, the
+    caller overriding only what it measured. Unknown keys are dropped (a typo can't smuggle
+    a field onto the record)."""
+    record: dict[str, Any] = {"event_type": "outcome", "in_response_to": in_response_to, "source": source}
+    for name in _OUTCOME_FIELDS:
+        record[name] = fields.get(name)
+    return record
+
+
 def _ask_text(proposed: Any, rationale: str | None = None) -> str:
     tool = str((proposed or {}).get("tool_name") or (proposed or {}).get("tool") or "(unknown)")
     inp = (proposed or {}).get("input")
@@ -311,6 +330,53 @@ class Daemon:
         return {"action": action, "features": features, "event_id": event_id,
                 "category": category, "rationale": rationale}
 
+    # ── result-time outcome capture (the decide-time decision's measured aftermath) ──
+    def _governance_event_ids(self) -> set[str]:
+        """Every event_id the governor actually decided on (a logged tool-proposed) — the
+        set an outcome may legitimately link back to."""
+        return {
+            r["event_id"]
+            for r in self.log.read()
+            if r.get("event_type") == "tool-proposed" and isinstance(r.get("event_id"), str)
+        }
+
+    def _last_outcome_pending_event_id(self) -> str | None:
+        """The most recent gated call that has no outcome record yet — the fallback the result
+        hook resolves to when it cannot name the event_id itself (mirrors _last_gated_event_id's
+        read-the-log pattern). Most recent wins; a call already carrying an outcome is skipped so
+        a burst of results does not all collapse onto the last proposal."""
+        records = self.log.read()
+        answered = {
+            str(r.get("in_response_to"))
+            for r in records
+            if r.get("event_type") == "outcome" and r.get("in_response_to")
+        }
+        pending: str | None = None
+        for r in records:
+            if r.get("event_type") == "tool-proposed" and isinstance(r.get("event_id"), str):
+                if r["event_id"] not in answered:
+                    pending = r["event_id"]
+        return pending
+
+    def result_sync(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Record a result-time outcome for a past decision. The caller names the event_id
+        explicitly, or we fall back to the most recent still-unanswered proposal. Append-only
+        telemetry (no engine, no lock): safe during boot, replay-inert. Multiple outcomes per
+        event_id are allowed (this result-time record plus a later grounding backfill)."""
+        event_id = payload.get("event_id") or self._last_outcome_pending_event_id()
+        self.log.append(
+            _outcome_record(
+                event_id, "result-hook",
+                completed=payload.get("completed"),
+                latency_s=payload.get("latency_s"),
+                spend_usd=payload.get("spend_usd"),
+                reverted=payload.get("reverted"),
+                retries=payload.get("retries"),
+                error=payload.get("error"),
+            )
+        )
+        return {"ok": True, "event_id": event_id}
+
     # ── explicit human feedback (Claude Code has no onResolution; close the loop here) ──
     def _features_for_event(self, event_id: str) -> dict[str, str] | None:
         """Recover the features logged at decide-time for a past event. The sync /decide
@@ -460,15 +526,34 @@ class Daemon:
                 )
         elif typ == "tool-completed":
             sid = str(event.get("session_id") or "")
+            outcome = event.get("outcome") or {}
             # Pop so each routing decision is credited exactly ONCE (else every later
             # tool-completed in the session re-applies the same outcome — evidence
             # over-counting — and entries accumulate unboundedly).
             pending = self._pending_routes.pop(sid, None)
-            success = bool((event.get("outcome") or {}).get("success", True))
+            success = bool(outcome.get("success", True))
             if pending:
                 with self.lock:
                     self.session.route_outcome(pending["model"], pending["features"], success)
                 self.log.append({"event_type": "route-outcome", "model_id": pending["model"], "features": pending["features"], "success": success})
+            # When the completion names a governance decision (in_response_to == a logged
+            # tool-proposed event_id — the openclaw body correlates by the governance eventId,
+            # not the tool-call id), ALSO record its measured outcome. Independent of the
+            # routing credit above: one credits the routed MODEL, this links the DECISION to
+            # what happened after it. Ignored when in_response_to is a bare tool-call id
+            # (no matching proposal) so a pre-fix body logs nothing spurious.
+            irt = str(event.get("in_response_to") or "")
+            if irt and irt in self._governance_event_ids():
+                dur = outcome.get("duration_ms")
+                latency_s = dur / 1000.0 if isinstance(dur, (int, float)) else None
+                self.log.append(
+                    _outcome_record(
+                        irt, "openclaw",
+                        completed=outcome.get("success"),
+                        latency_s=latency_s,
+                        error=outcome.get("error"),
+                    )
+                )
         else:
             # turn-cost / governance-latency / counterfactual-decision: telemetry — log only.
             self.log.append(dict(event))
@@ -476,11 +561,45 @@ class Daemon:
     def report(self) -> dict[str, Any]:
         records = self.log.read()
         decisions: dict[str, int] = {}
+        would_block = 0
+        total_usd = 0.0
+        outcome_records = 0
+        completed = 0
+        reverted = 0
         for r in records:
-            if r.get("event_type") == "decision":
+            et = r.get("event_type")
+            if et == "decision":
                 a = str(r.get("action"))
                 decisions[a] = decisions.get(a, 0) + 1
-        return {"events": len(records), "decisions": decisions}
+            elif et == "counterfactual-decision":
+                would_block += 1
+            elif et == "turn-cost":
+                usd = r.get("usd")
+                if isinstance(usd, (int, float)):
+                    total_usd += usd
+            elif et == "outcome":
+                outcome_records += 1
+                spend = r.get("spend_usd")
+                if isinstance(spend, (int, float)):
+                    total_usd += spend
+                if r.get("completed") is True:
+                    completed += 1
+                if r.get("reverted") is True:
+                    reverted += 1
+        return {
+            # Existing keys (unchanged — existing consumers/tests depend on them).
+            "events": len(records),
+            "decisions": decisions,
+            # Aggregates the session-summary surface reads: measured observables only,
+            # no fabricated savings estimate.
+            "total_events": sum(decisions.values()),
+            "prevented_calls": decisions.get("block", 0),
+            "would_block_calls": would_block,
+            "total_usd": total_usd,
+            "outcome_records": outcome_records,
+            "completed": completed,
+            "reverted": reverted,
+        }
 
     # ── HTTP ──
     def _handler_class(self) -> type[BaseHTTPRequestHandler]:
@@ -543,6 +662,16 @@ class Daemon:
                     except Exception as err:  # fail-open
                         daemon.logline(f"credence-governor: sensor error (failing open): {err}")
                     return self._json(200, {"ack": True})
+                if url.startswith("/result"):
+                    # Result-time outcome capture: append-only telemetry, no engine — so it
+                    # runs even while booting (and is fail-open: a bad record must never
+                    # surface as an error to the result hook, which swallows it regardless).
+                    try:
+                        payload = self._read_body()
+                        return self._json(200, daemon.result_sync(payload))
+                    except Exception as err:
+                        daemon.logline(f"credence-governor: /result error (non-fatal): {err}")
+                        return self._json(200, {"ok": False, "error": str(err)})
                 if url.startswith("/feedback"):
                     try:
                         payload = self._read_body()
