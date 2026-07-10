@@ -1,6 +1,17 @@
 # Governance roadmap: proplang as the decision core for coding agents
 
-Status: adopted 2026-07-10 (Phase 0 in execution). Owners are marked per phase:
+Status: adopted 2026-07-10. Phase 0 EXECUTED (2026-07-10: observables live, 29.5k
+outcomes grounded, R-D16 resolved). Phase 2's builder half EXECUTED (2026-07-10,
+PR #26: the dual shadow — table@1 + latent@1 — live beside every decide;
+declaration register `docs/membrane-shadow.md`; stated prediction confirmed in the
+field: latent@1 constant-blocks, ask-rate 0). Phase 1's builder half EXECUTED
+(2026-07-10, PR #27: `benchmarks/outcome_bench/` — the committed reading:
+incumbent $0.0853/decision, FBR 6.5% waste / 37.7% safety, catch 0/10, π* = ∞;
+membrane-table@1 $0.0200 all-ask; registration draft
+`docs/rd14-registration-draft.md` awaits the author). Next author acts: R-D14
+registration + bar values; the Phase-3 A-gate reading now has its demand shape
+(three engines failing three different ways — over-block / over-ask /
+degenerate-said constant-block). Owners are marked per phase:
 "builder" = work that can proceed on unfrozen surfaces without a proplang boundary;
 "author" = an act only the proplang author can perform (a ruling, a metric
 registration, an oracle-first freeze). This document is descriptive of the joined
