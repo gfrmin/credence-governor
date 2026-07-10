@@ -154,6 +154,40 @@ def test_respawn_policy_bounded(tmp_path):
         shadow.close()
 
 
+def test_respawn_refreshes_the_snapshot(tmp_path):
+    """A respawned session boots from a FRESH snapshot — evidence that
+    arrived since daemon start is replayed, not silently lost (PR #26
+    review finding)."""
+    snapshots: list[list] = []
+
+    def factory(snapshot):
+        snapshots.append(snapshot.read())
+        s = FakeSession()
+        if len(snapshots) == 1:
+            s.decide_error = RuntimeError("first session dies")
+        return s
+
+    log, shadow = make_shadow(tmp_path, [("latent@1", factory)],
+                              max_respawns=1, respawn_backoff_s=0.0)
+    log.append({"event_type": "tool-proposed", "event_id": "pre",
+                "features": {"tool-name": "bash"}})
+    shadow.start()
+    try:
+        assert wait_for(lambda: len(snapshots) == 1)
+        # evidence arrives after start, then the first session dies
+        log.append({"event_type": "user-responded", "in_response_to": "pre",
+                    "response": "yes"})
+        shadow.submit_decide("e1", {"tool-name": "bash"})   # kills session 1
+        assert wait_for(lambda: len(snapshots) == 2)
+        assert [r["event_type"] for r in snapshots[0]] == ["tool-proposed"]
+        assert [r["event_type"] for r in snapshots[1]] == [
+            "tool-proposed", "user-responded"]              # refreshed
+        assert wait_for(lambda: shadow.stats()["forms"]["latent@1"]
+                        ["snapshot_records"] == 2)
+    finally:
+        shadow.close()
+
+
 def test_boot_failure_counts_and_other_form_survives(tmp_path):
     healthy = FakeSession(action="proceed")
     log, shadow = make_shadow(

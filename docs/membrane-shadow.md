@@ -154,7 +154,19 @@ the author can open — Phase-3 material, now with a measured demand shape.
     for BOTH forms during a table@1 re-boot and drains afterwards; near the
     ~1000-item bound, drops). Accepted single-worker posture — per-form
     workers would trade it for cross-form ordering complexity; revisit only
-    if measured drops matter.
+    if measured drops matter. Two review findings fixed before merge
+    (PR #26 review): (a) a RESPAWN refreshes the boot snapshot, so a
+    respawned session replays evidence that arrived since daemon start
+    instead of silently missing it — outcomes re-dedup via the fresh
+    seen-set; the residual race (a verdict enqueued-but-undispatched at
+    refresh time fed twice) is rare and telemetry-only; `snapshot_records`
+    per form in stats() makes any coverage gap visible. (b) The wire has a
+    per-read TIMEOUT (`CREDENCE_MEMBRANE_READ_TIMEOUT`, default 300 s, a
+    transport knob): a wedged driver (alive, unresponsive) raises and
+    enters the dead/respawn path instead of parking the worker forever;
+    `close()` force-kills children if the worker doesn't join (no orphaned
+    govhost past daemon shutdown). Caveat: a driver that writes a partial
+    line then wedges still blocks (accepted).
 15. **Boot vs live double-feed:** `MembraneShadow.start()` snapshots the log
     synchronously before the HTTP server serves; sessions boot against the
     frozen snapshot; everything later arrives only via submits. Events

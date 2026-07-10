@@ -63,6 +63,7 @@ class _SnapshotLog(ObservationLog):
     def __init__(self, records: list[dict[str, Any]]):
         super().__init__(log_path="")
         self._records = records
+        self.n_records = len(records)
 
     def read(self) -> list[dict[str, Any]]:
         return list(self._records)
@@ -85,6 +86,9 @@ class _FormState:
         self.decides = 0
         self.errors = 0
         self.boot_s: float | None = None
+        # boot-replay coverage marker: how many log records this session's
+        # boot snapshot held — lets a reading flag respawn evidence gaps.
+        self.snapshot_records: int | None = None
 
 
 class MembraneShadow:
@@ -140,6 +144,20 @@ class MembraneShadow:
         self._closed.set()
         if self._thread is not None:
             self._thread.join(timeout=10)
+            if self._thread.is_alive():
+                # the worker is parked in a blocking wire read (a wedged
+                # driver): force-kill the children so the read unblocks
+                # (EOF) and the worker exits — never leak a govhost child
+                # past daemon shutdown. Popen.kill from another thread is
+                # safe; the worker's own error path tolerates the EOF.
+                for st in self._forms:
+                    session = st.session
+                    if session is not None:
+                        try:
+                            session.client.shutdown()
+                        except Exception:  # noqa: BLE001
+                            pass
+                self._thread.join(timeout=5)
 
     def stats(self) -> dict[str, Any]:
         return {
@@ -152,6 +170,7 @@ class MembraneShadow:
                     "decides": st.decides,
                     "errors": st.errors,
                     "boot_s": st.boot_s,
+                    "snapshot_records": st.snapshot_records,
                 }
                 for st in self._forms
             },
@@ -162,6 +181,7 @@ class MembraneShadow:
         assert self._snapshot is not None
         t0 = time.monotonic()
         try:
+            st.snapshot_records = self._snapshot.n_records
             st.session = st.factory(self._snapshot)
             st.session.boot()
             st.boot_s = round(time.monotonic() - t0, 3)
@@ -197,6 +217,14 @@ class MembraneShadow:
         if time.monotonic() < st.next_attempt_at:
             return
         st.respawns += 1
+        # refresh the boot snapshot: a respawned session must not reboot
+        # from the day-zero state and silently miss every verdict/outcome
+        # that arrived since (review finding, PR #26). Outcomes re-dedup
+        # via the fresh session's boot-fed seen-set; the residual risk is
+        # a verdict enqueued-but-undispatched at this instant being fed
+        # twice (already in the new snapshot AND still in the queue) —
+        # rare, telemetry-only, documented in docs/membrane-shadow.md.
+        self._snapshot = _SnapshotLog(self._log.read())
         self._boot(st)
 
     def _dispatch(self, st: _FormState, item: tuple) -> None:

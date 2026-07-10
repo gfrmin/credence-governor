@@ -253,6 +253,21 @@ def test_latent_think_maps_to_fail_open_proceed(tmp_path):
     assert sess.decide({"tool-name": "bash"}) == "proceed"
 
 
+def test_wire_read_timeout_surfaces_a_wedged_driver():
+    """A driver that is alive but never replies must raise (so the shadow
+    can mark it dead and respawn), not park the caller forever (PR #26
+    review finding)."""
+    from credence_governor_core.membrane import MembraneClient
+
+    client = MembraneClient.spawn(
+        ["sleep", "30"], log=lambda _m: None, read_timeout_s=0.2)
+    try:
+        with pytest.raises(MembraneError, match="unresponsive"):
+            client.request({"membrane": 1})
+    finally:
+        client.shutdown()
+
+
 @pytest.mark.skipif(
     not os.environ.get(MEMBRANE_ENV),
     reason=f"end-to-end path needs {MEMBRANE_ENV} pointing at proplang-govhost",

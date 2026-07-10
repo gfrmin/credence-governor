@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import json
 import os
+import selectors
 import shlex
 import subprocess
 from typing import Any, Callable, Iterator
@@ -73,6 +74,13 @@ from .config import GOVERNANCE, UTILITY
 
 MEMBRANE_ENV = "CREDENCE_MEMBRANE_COMMAND"
 WARM_CAP_ENV = "CREDENCE_MEMBRANE_WARM_CAP"
+# per-read wire timeout (seconds) — a TRANSPORT knob (HOSTS_PLAN 2.5 class):
+# distinguishes a wedged driver (alive, unresponsive) from a slow many-tick
+# replay (each individual reply is sub-second; only their number is large).
+# A timeout raises MembraneError so the shadow's dead/respawn machinery can
+# self-heal instead of parking its worker forever on readline().
+READ_TIMEOUT_ENV = "CREDENCE_MEMBRANE_READ_TIMEOUT"
+DEFAULT_READ_TIMEOUT_S = 300.0
 
 # R1 as ruled: ask, block, proceed — listing order is normative on the
 # wire (argmaxEU ties resolve first-listed).
@@ -237,7 +245,9 @@ class MembraneClient:
         self._shutdown = shutdown
 
     @classmethod
-    def spawn(cls, argv: list[str], log: Callable[[str], None] = print) -> "MembraneClient":
+    def spawn(cls, argv: list[str], log: Callable[[str], None] = print,
+              read_timeout_s: float | None = DEFAULT_READ_TIMEOUT_S,
+              ) -> "MembraneClient":
         log(f"credence-governor: membrane engine = {' '.join(argv)}")
         proc = subprocess.Popen(
             argv,
@@ -254,6 +264,20 @@ class MembraneClient:
 
         def read_line() -> str:
             assert proc.stdout is not None
+            if read_timeout_s is not None:
+                # a hung driver (alive, no reply) must surface as an error,
+                # not park the caller forever. Caveat (documented): a driver
+                # that writes a PARTIAL line and then wedges passes the
+                # readiness check and still blocks — rare enough to accept.
+                sel = selectors.DefaultSelector()
+                try:
+                    sel.register(proc.stdout, selectors.EVENT_READ)
+                    if not sel.select(timeout=read_timeout_s):
+                        raise MembraneError(
+                            f"membrane driver unresponsive "
+                            f"({read_timeout_s}s read timeout)")
+                finally:
+                    sel.close()
             line = proc.stdout.readline()
             if line == "":
                 raise MembraneError("membrane driver closed the wire (EOF)")
@@ -276,7 +300,9 @@ class MembraneClient:
             raise RuntimeError(
                 f"no membrane engine: set {MEMBRANE_ENV} to the "
                 "proplang-govhost launch argv")
-        return cls.spawn(shlex.split(cmd), log)
+        timeout = float(os.environ.get(READ_TIMEOUT_ENV, DEFAULT_READ_TIMEOUT_S))
+        return cls.spawn(shlex.split(cmd), log,
+                         read_timeout_s=timeout if timeout > 0 else None)
 
     def request(self, obj: dict[str, Any]) -> dict[str, Any]:
         self._write(json.dumps(obj))
