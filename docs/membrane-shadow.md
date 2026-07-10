@@ -149,7 +149,12 @@ the author can open — Phase-3 material, now with a measured demand shape.
     until respawn; respawn budget exhausted = dead until daemon restart; the
     primary path is structurally unreachable from any of it (enqueue-only,
     never-raise submits + a worker-owned session + defense-in-depth
-    try/except at every daemon mirror site).
+    try/except at every daemon mirror site). Observed in the field: a
+    RESPAWN boot blocks the single worker's drain loop (the queue backs up
+    for BOTH forms during a table@1 re-boot and drains afterwards; near the
+    ~1000-item bound, drops). Accepted single-worker posture — per-form
+    workers would trade it for cross-form ordering complexity; revisit only
+    if measured drops matter.
 15. **Boot vs live double-feed:** `MembraneShadow.start()` snapshots the log
     synchronously before the HTTP server serves; sessions boot against the
     frozen snapshot; everything later arrives only via submits. Events
