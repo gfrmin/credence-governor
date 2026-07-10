@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "credence-governor-core"
-version = "0.11.0"
+version = "0.11.1"
 description = "Harness- and domain-neutral Bayesian tool-call governance — a pure wire consumer of the Credence engine (credence-skin). Run credence-governor-daemon to serve it on :8787."
 requires-python = ">=3.11"
 readme = "README.md"

@@ -8,8 +8,13 @@ field: latent@1 constant-blocks, ask-rate 0). Phase 1's builder half EXECUTED
 (2026-07-10, PR #27: `benchmarks/outcome_bench/` — the committed reading:
 incumbent $0.0853/decision, FBR 6.5% waste / 37.7% safety, catch 0/10, π* = ∞;
 membrane-table@1 $0.0200 all-ask; registration draft
-`docs/rd14-registration-draft.md` awaits the author). Next author acts: R-D14
-registration + bar values; the Phase-3 A-gate reading now has its demand shape
+`docs/rd14-registration-draft.md` awaits the author). **Phase 1 CLOSED
+(2026-07-11): R-D14 REGISTERED at the author's signed boundary (proplang tag
+`rd14-close`) — the realized-loss metric is the membrane's acceptance standard;
+exit-from-shadow declared: bar_waste 0.05%, n_min 1,000, rolling 30 days;
+safety bar deferred to the harm-channel ruling. First registered reading:
+incumbent FAILS the waste bar (6.50% vs 0.05%).** Next author act: the
+Phase-3 A-gate reading, which now has its demand shape
 (three engines failing three different ways — over-block / over-ask /
 degenerate-said constant-block). Owners are marked per phase:
 "builder" = work that can proceed on unfrozen surfaces without a proplang boundary;

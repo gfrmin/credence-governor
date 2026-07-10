@@ -27,6 +27,7 @@ import json
 import math
 import os
 import sys
+import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
@@ -213,10 +214,18 @@ def profile_sweep(rows: list[BenchRecord],
     return sweep
 
 
-# The declared-bar table: SHAPE shipped, values UNREGISTERED until the
-# author's R-D14 act (docs/rd14-registration-draft.md).
-UNREGISTERED_BARS: dict[str, dict[str, float]] = {}
-N_MIN_PLACEHOLDER = 100
+# The declared bars — REGISTERED at the author's R-D14 boundary (proplang
+# tag rd14-close, 2026-07-11): bar_waste = 0.05% (at-or-under the
+# perfect-catch break-even at the measured base rate), n_min = 1,000
+# accepted per category, window = rolling 30 days. The safety category's
+# bar is DEFERRED to the harm-channel ruling (this currency prices waste
+# only), so safety carries no declared bar and clears_bar returns None.
+REGISTERED_BARS: dict[str, dict[str, float]] = {
+    "waste": {"fbr_bar": 0.0005},
+}
+REGISTERED_N_MIN = 1000
+REGISTERED_WINDOW_DAYS = 30
+REGISTRATION = "proplang tag rd14-close (2026-07-11)"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -230,6 +239,17 @@ def main(argv: list[str] | None = None) -> int:
 
     records, manifest = corpus.read_snapshot(args.log)
     rows, orphans = join(records)
+    # the REGISTERED window (rolling 30 days): rows whose decision carries a
+    # ts older than the window are excluded; unstamped rows (the pre-ts
+    # corpus) are included — every one predates the ts field (2026-07-11)
+    # and the capture itself is younger than the window, so inclusion is
+    # exact today and the roll becomes exact as stamped records accumulate.
+    read_epoch = time.mktime(time.strptime(manifest["read_at"], "%Y-%m-%dT%H:%M:%SZ"))
+    cutoff = read_epoch - REGISTERED_WINDOW_DAYS * 86400
+    n_before = len(rows)
+    rows = [r for r in rows if r.ts is None or r.ts >= cutoff]
+    window_note = (f"rolling {REGISTERED_WINDOW_DAYS}d: {n_before - len(rows)} "
+                   f"stamped rows aged out; unstamped rows included (pre-ts corpus)")
     stats = corpus_stats(rows)
     print(json.dumps({"manifest": manifest, "orphans": orphans,
                       "corpus": stats}, indent=1))
@@ -264,11 +284,14 @@ def main(argv: list[str] | None = None) -> int:
         "challenger": challenger_note,
         "engines": {name: _score_to_json(score_engine(rows, dec))
                     for name, dec in engines.items()},
-        "bars": {"values": UNREGISTERED_BARS or "UNREGISTERED",
-                 "n_min": N_MIN_PLACEHOLDER,
+        "bars": {"values": REGISTERED_BARS,
+                 "n_min": REGISTERED_N_MIN,
+                 "window_days": REGISTERED_WINDOW_DAYS,
+                 "window_note": window_note,
+                 "registered": REGISTRATION,
                  "clears": {
                      name: clears_bar(score_engine(rows, dec),
-                                      UNREGISTERED_BARS, N_MIN_PLACEHOLDER)
+                                      REGISTERED_BARS, REGISTERED_N_MIN)
                      for name, dec in engines.items()}},
     }
     if not args.no_sweep:
