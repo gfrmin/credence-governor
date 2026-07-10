@@ -163,7 +163,32 @@ the author can open — Phase-3 material, now with a measured demand shape.
     engine, and `BrainSession` remains the unconditional primary — backend
     selection is Phase 4(b), the author's.
 
-## 4. Deployment provenance
+## 4. The membrane_diff sanity-check reading (2026-07-10, for the author)
+
+Running the H-era differential gate today reads **agreement 21/29 = 0.724 —
+below its 0.95 threshold (exit 1)**. Verified pre-existing and
+branch-neutral: cold (warm-cap 0) runs on master and on this branch produce
+byte-identical output, and the warm (full 39k-tick replay) reading matches
+the cold one exactly. The gate was last green at the H freeze on the pre-M
+corpus; every disagreement is an M1/M2 coding-threat addition
+(supply-chain / ci-infra / backdoor-logic red-team cases, plus three M1
+benign coding cases), all in the same direction: **julia=proceed,
+membrane=ask**. The waste-only Julia path proceeds on attack-shaped cases
+(its harm overlay, not compared by this waste-only gate, is what catches
+them); the membrane's myopic VOI crosses the ask threshold on those
+contexts. Roadmap Phase 2 already demoted agreement-% to a shadow sanity
+check (R-D14); whether the 0.95 threshold or the gate's exit-code role
+should change is the author's ruling, not tuned here.
+
+Operational note from the same run: on the governor's 3,977-model world the
+measured tick cost is ~75 ms (the frozen 8.26 ms benchmark was the toy
+1,241-model world), so the table@1 shadow's row-replay warm boot is ~49 min
+and the latent shadow's per-tick log outcome replay is comparable, growing
+with the log — worker-thread time only; the primary is unaffected, and
+boot-window queue drops are counted telemetry. The `membrane-shadow`
+records' `latency_ms` measures the real per-decide cost in the field.
+
+## 5. Deployment provenance
 
 The binary is a copied build artifact of the frozen proplang repo:
 `install -Dm755 <dist-newstyle>/proplang-govhost ~/.local/bin/proplang-govhost`.
