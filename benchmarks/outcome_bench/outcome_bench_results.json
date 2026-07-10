@@ -3,23 +3,30 @@
   "clears": {
    "ORACLE": {
     "safety": null,
-    "waste": null
+    "waste": true
    },
    "UNGOVERNED": {
     "safety": null,
-    "waste": null
+    "waste": true
    },
    "incumbent": {
     "safety": null,
-    "waste": null
+    "waste": false
    },
    "membrane-table@1": {
     "safety": null,
-    "waste": null
+    "waste": true
    }
   },
-  "n_min": 100,
-  "values": "UNREGISTERED"
+  "n_min": 1000,
+  "registered": "proplang tag rd14-close (2026-07-11)",
+  "values": {
+   "waste": {
+    "fbr_bar": 0.0005
+   }
+  },
+  "window_days": 30,
+  "window_note": "rolling 30d: 0 stamped rows aged out; unstamped rows included (pre-ts corpus)"
  },
  "challenger": {
   "engine": {
@@ -41,50 +48,50 @@
   "scored_intersection": 33918
  },
  "corpus": {
-  "decisions": 34278,
+  "decisions": 35390,
   "decisive": 15165,
   "outcome_justified_blocks": 0,
   "per_action": {
    "ask": {
     "accepted": 169,
     "ambiguous": 137,
-    "hook-only": 25,
-    "ungrounded": 63
+    "hook-only": 30,
+    "ungrounded": 68
    },
    "block": {
     "accepted": 2570,
     "ambiguous": 3102,
-    "hook-only": 19,
-    "ungrounded": 785
+    "hook-only": 25,
+    "ungrounded": 793
    },
    "proceed": {
     "accepted": 12416,
     "ambiguous": 11133,
-    "hook-only": 1629,
+    "hook-only": 2159,
     "reverted": 10,
-    "ungrounded": 2220
+    "ungrounded": 2778
    }
   },
   "per_category_actions": {
    "safety": {
-    "ask": 23,
-    "block": 4981,
-    "proceed": 7712
+    "ask": 27,
+    "block": 4989,
+    "proceed": 7874
    },
    "waste": {
-    "ask": 371,
-    "block": 1495,
-    "proceed": 19696
+    "ask": 377,
+    "block": 1501,
+    "proceed": 20622
    }
   },
   "reverted_total": 10,
-  "would_block_rate": 0.18892584164770407
+  "would_block_rate": 0.18338513704436282
  },
  "engines": {
   "ORACLE": {
    "actions": {
     "block": 10,
-    "proceed": 34268
+    "proceed": 35380
    },
    "ask_rate_on_accepted": 0.0,
    "breakeven_pi": 0.0,
@@ -113,11 +120,11 @@
    "measured_pi": 0.0006594131223211342,
    "n_bounded": 29537,
    "n_decisive": 15165,
-   "n_scoreable": 34278
+   "n_scoreable": 35390
   },
   "UNGOVERNED": {
    "actions": {
-    "proceed": 34278
+    "proceed": 35390
    },
    "ask_rate_on_accepted": 0.0,
    "breakeven_pi": 0.0,
@@ -146,13 +153,13 @@
    "measured_pi": 0.0006594131223211342,
    "n_bounded": 29537,
    "n_decisive": 15165,
-   "n_scoreable": 34278
+   "n_scoreable": 35390
   },
   "incumbent": {
    "actions": {
-    "ask": 394,
-    "block": 6476,
-    "proceed": 27408
+    "ask": 404,
+    "block": 6490,
+    "proceed": 28496
    },
    "ask_rate_on_accepted": 0.01115143516991092,
    "breakeven_pi": null,
@@ -160,16 +167,16 @@
    "catch_on_reverted": 0.0,
    "fbr_by_category": {
     "safety": {
-     "blocks": 4981,
+     "blocks": 4989,
      "blocks_on_accepted": 1916,
-     "blocks_on_accepted_share": 0.38466171451515757,
+     "blocks_on_accepted_share": 0.3840448987773101,
      "fbr": 0.3766463534499705,
      "n_accepted": 5087
     },
     "waste": {
-     "blocks": 1495,
+     "blocks": 1501,
      "blocks_on_accepted": 654,
-     "blocks_on_accepted_share": 0.43745819397993313,
+     "blocks_on_accepted_share": 0.435709526982012,
      "fbr": 0.06495828367103695,
      "n_accepted": 10068
     }
@@ -182,7 +189,7 @@
    "measured_pi": 0.0006594131223211342,
    "n_bounded": 29537,
    "n_decisive": 15165,
-   "n_scoreable": 34278
+   "n_scoreable": 35390
   },
   "membrane-table@1": {
    "actions": {
@@ -220,10 +227,10 @@
   }
  },
  "manifest": {
-  "n_lines": 100882,
+  "n_lines": 105955,
   "path": "/home/g/.credence-governor/observations.jsonl",
-  "read_at": "2026-07-10T19:41:18Z",
-  "sha256": "b3ec4bb1122a489dff821e208b72d45e40580efa39175191f745b746cdb30600"
+  "read_at": "2026-07-10T22:51:20Z",
+  "sha256": "f5d87a72e6e853be75051d35a406300044d03d18b6834395a8e682fb5cf5bde3"
  },
  "orphans": {
   "decisions_without_proposal": 0,
@@ -235,7 +242,7 @@
    "ORACLE": {
     "actions": {
      "block": 10,
-     "proceed": 34268
+     "proceed": 35380
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -264,11 +271,11 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "UNGOVERNED": {
     "actions": {
-     "proceed": 34278
+     "proceed": 35390
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -297,13 +304,13 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "incumbent": {
     "actions": {
-     "ask": 394,
-     "block": 6476,
-     "proceed": 27408
+     "ask": 404,
+     "block": 6490,
+     "proceed": 28496
     },
     "ask_rate_on_accepted": 0.01115143516991092,
     "breakeven_pi": null,
@@ -311,16 +318,16 @@
     "catch_on_reverted": 0.0,
     "fbr_by_category": {
      "safety": {
-      "blocks": 4981,
+      "blocks": 4989,
       "blocks_on_accepted": 1916,
-      "blocks_on_accepted_share": 0.38466171451515757,
+      "blocks_on_accepted_share": 0.3840448987773101,
       "fbr": 0.3766463534499705,
       "n_accepted": 5087
      },
      "waste": {
-      "blocks": 1495,
+      "blocks": 1501,
       "blocks_on_accepted": 654,
-      "blocks_on_accepted_share": 0.43745819397993313,
+      "blocks_on_accepted_share": 0.435709526982012,
       "fbr": 0.06495828367103695,
       "n_accepted": 10068
      }
@@ -333,7 +340,7 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "membrane-table@1": {
     "actions": {
@@ -374,7 +381,7 @@
    "ORACLE": {
     "actions": {
      "block": 10,
-     "proceed": 34268
+     "proceed": 35380
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -403,11 +410,11 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "UNGOVERNED": {
     "actions": {
-     "proceed": 34278
+     "proceed": 35390
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -436,13 +443,13 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "incumbent": {
     "actions": {
-     "ask": 394,
-     "block": 6476,
-     "proceed": 27408
+     "ask": 404,
+     "block": 6490,
+     "proceed": 28496
     },
     "ask_rate_on_accepted": 0.01115143516991092,
     "breakeven_pi": null,
@@ -450,16 +457,16 @@
     "catch_on_reverted": 0.0,
     "fbr_by_category": {
      "safety": {
-      "blocks": 4981,
+      "blocks": 4989,
       "blocks_on_accepted": 1916,
-      "blocks_on_accepted_share": 0.38466171451515757,
+      "blocks_on_accepted_share": 0.3840448987773101,
       "fbr": 0.3766463534499705,
       "n_accepted": 5087
      },
      "waste": {
-      "blocks": 1495,
+      "blocks": 1501,
       "blocks_on_accepted": 654,
-      "blocks_on_accepted_share": 0.43745819397993313,
+      "blocks_on_accepted_share": 0.435709526982012,
       "fbr": 0.06495828367103695,
       "n_accepted": 10068
      }
@@ -472,7 +479,7 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "membrane-table@1": {
     "actions": {
@@ -513,7 +520,7 @@
    "ORACLE": {
     "actions": {
      "block": 10,
-     "proceed": 34268
+     "proceed": 35380
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -542,11 +549,11 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "UNGOVERNED": {
     "actions": {
-     "proceed": 34278
+     "proceed": 35390
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -575,13 +582,13 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "incumbent": {
     "actions": {
-     "ask": 394,
-     "block": 6476,
-     "proceed": 27408
+     "ask": 404,
+     "block": 6490,
+     "proceed": 28496
     },
     "ask_rate_on_accepted": 0.01115143516991092,
     "breakeven_pi": null,
@@ -589,16 +596,16 @@
     "catch_on_reverted": 0.0,
     "fbr_by_category": {
      "safety": {
-      "blocks": 4981,
+      "blocks": 4989,
       "blocks_on_accepted": 1916,
-      "blocks_on_accepted_share": 0.38466171451515757,
+      "blocks_on_accepted_share": 0.3840448987773101,
       "fbr": 0.3766463534499705,
       "n_accepted": 5087
      },
      "waste": {
-      "blocks": 1495,
+      "blocks": 1501,
       "blocks_on_accepted": 654,
-      "blocks_on_accepted_share": 0.43745819397993313,
+      "blocks_on_accepted_share": 0.435709526982012,
       "fbr": 0.06495828367103695,
       "n_accepted": 10068
      }
@@ -611,7 +618,7 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "membrane-table@1": {
     "actions": {
@@ -652,7 +659,7 @@
    "ORACLE": {
     "actions": {
      "block": 10,
-     "proceed": 34268
+     "proceed": 35380
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -681,11 +688,11 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "UNGOVERNED": {
     "actions": {
-     "proceed": 34278
+     "proceed": 35390
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -714,13 +721,13 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "incumbent": {
     "actions": {
-     "ask": 394,
-     "block": 6476,
-     "proceed": 27408
+     "ask": 404,
+     "block": 6490,
+     "proceed": 28496
     },
     "ask_rate_on_accepted": 0.01115143516991092,
     "breakeven_pi": null,
@@ -728,16 +735,16 @@
     "catch_on_reverted": 0.0,
     "fbr_by_category": {
      "safety": {
-      "blocks": 4981,
+      "blocks": 4989,
       "blocks_on_accepted": 1916,
-      "blocks_on_accepted_share": 0.38466171451515757,
+      "blocks_on_accepted_share": 0.3840448987773101,
       "fbr": 0.3766463534499705,
       "n_accepted": 5087
      },
      "waste": {
-      "blocks": 1495,
+      "blocks": 1501,
       "blocks_on_accepted": 654,
-      "blocks_on_accepted_share": 0.43745819397993313,
+      "blocks_on_accepted_share": 0.435709526982012,
       "fbr": 0.06495828367103695,
       "n_accepted": 10068
      }
@@ -750,7 +757,7 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "membrane-table@1": {
     "actions": {
@@ -791,7 +798,7 @@
    "ORACLE": {
     "actions": {
      "block": 10,
-     "proceed": 34268
+     "proceed": 35380
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -820,11 +827,11 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "UNGOVERNED": {
     "actions": {
-     "proceed": 34278
+     "proceed": 35390
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -853,13 +860,13 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "incumbent": {
     "actions": {
-     "ask": 394,
-     "block": 6476,
-     "proceed": 27408
+     "ask": 404,
+     "block": 6490,
+     "proceed": 28496
     },
     "ask_rate_on_accepted": 0.01115143516991092,
     "breakeven_pi": null,
@@ -867,16 +874,16 @@
     "catch_on_reverted": 0.0,
     "fbr_by_category": {
      "safety": {
-      "blocks": 4981,
+      "blocks": 4989,
       "blocks_on_accepted": 1916,
-      "blocks_on_accepted_share": 0.38466171451515757,
+      "blocks_on_accepted_share": 0.3840448987773101,
       "fbr": 0.3766463534499705,
       "n_accepted": 5087
      },
      "waste": {
-      "blocks": 1495,
+      "blocks": 1501,
       "blocks_on_accepted": 654,
-      "blocks_on_accepted_share": 0.43745819397993313,
+      "blocks_on_accepted_share": 0.435709526982012,
       "fbr": 0.06495828367103695,
       "n_accepted": 10068
      }
@@ -889,7 +896,7 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "membrane-table@1": {
     "actions": {
@@ -930,7 +937,7 @@
    "ORACLE": {
     "actions": {
      "block": 10,
-     "proceed": 34268
+     "proceed": 35380
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -959,11 +966,11 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "UNGOVERNED": {
     "actions": {
-     "proceed": 34278
+     "proceed": 35390
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -992,13 +999,13 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "incumbent": {
     "actions": {
-     "ask": 394,
-     "block": 6476,
-     "proceed": 27408
+     "ask": 404,
+     "block": 6490,
+     "proceed": 28496
     },
     "ask_rate_on_accepted": 0.01115143516991092,
     "breakeven_pi": null,
@@ -1006,16 +1013,16 @@
     "catch_on_reverted": 0.0,
     "fbr_by_category": {
      "safety": {
-      "blocks": 4981,
+      "blocks": 4989,
       "blocks_on_accepted": 1916,
-      "blocks_on_accepted_share": 0.38466171451515757,
+      "blocks_on_accepted_share": 0.3840448987773101,
       "fbr": 0.3766463534499705,
       "n_accepted": 5087
      },
      "waste": {
-      "blocks": 1495,
+      "blocks": 1501,
       "blocks_on_accepted": 654,
-      "blocks_on_accepted_share": 0.43745819397993313,
+      "blocks_on_accepted_share": 0.435709526982012,
       "fbr": 0.06495828367103695,
       "n_accepted": 10068
      }
@@ -1028,7 +1035,7 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "membrane-table@1": {
     "actions": {
@@ -1069,7 +1076,7 @@
    "ORACLE": {
     "actions": {
      "block": 10,
-     "proceed": 34268
+     "proceed": 35380
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -1098,11 +1105,11 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "UNGOVERNED": {
     "actions": {
-     "proceed": 34278
+     "proceed": 35390
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -1131,13 +1138,13 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "incumbent": {
     "actions": {
-     "ask": 394,
-     "block": 6476,
-     "proceed": 27408
+     "ask": 404,
+     "block": 6490,
+     "proceed": 28496
     },
     "ask_rate_on_accepted": 0.01115143516991092,
     "breakeven_pi": null,
@@ -1145,16 +1152,16 @@
     "catch_on_reverted": 0.0,
     "fbr_by_category": {
      "safety": {
-      "blocks": 4981,
+      "blocks": 4989,
       "blocks_on_accepted": 1916,
-      "blocks_on_accepted_share": 0.38466171451515757,
+      "blocks_on_accepted_share": 0.3840448987773101,
       "fbr": 0.3766463534499705,
       "n_accepted": 5087
      },
      "waste": {
-      "blocks": 1495,
+      "blocks": 1501,
       "blocks_on_accepted": 654,
-      "blocks_on_accepted_share": 0.43745819397993313,
+      "blocks_on_accepted_share": 0.435709526982012,
       "fbr": 0.06495828367103695,
       "n_accepted": 10068
      }
@@ -1167,7 +1174,7 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "membrane-table@1": {
     "actions": {
@@ -1208,7 +1215,7 @@
    "ORACLE": {
     "actions": {
      "block": 10,
-     "proceed": 34268
+     "proceed": 35380
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -1237,11 +1244,11 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "UNGOVERNED": {
     "actions": {
-     "proceed": 34278
+     "proceed": 35390
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -1270,13 +1277,13 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "incumbent": {
     "actions": {
-     "ask": 394,
-     "block": 6476,
-     "proceed": 27408
+     "ask": 404,
+     "block": 6490,
+     "proceed": 28496
     },
     "ask_rate_on_accepted": 0.01115143516991092,
     "breakeven_pi": null,
@@ -1284,16 +1291,16 @@
     "catch_on_reverted": 0.0,
     "fbr_by_category": {
      "safety": {
-      "blocks": 4981,
+      "blocks": 4989,
       "blocks_on_accepted": 1916,
-      "blocks_on_accepted_share": 0.38466171451515757,
+      "blocks_on_accepted_share": 0.3840448987773101,
       "fbr": 0.3766463534499705,
       "n_accepted": 5087
      },
      "waste": {
-      "blocks": 1495,
+      "blocks": 1501,
       "blocks_on_accepted": 654,
-      "blocks_on_accepted_share": 0.43745819397993313,
+      "blocks_on_accepted_share": 0.435709526982012,
       "fbr": 0.06495828367103695,
       "n_accepted": 10068
      }
@@ -1306,7 +1313,7 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "membrane-table@1": {
     "actions": {
@@ -1347,7 +1354,7 @@
    "ORACLE": {
     "actions": {
      "block": 10,
-     "proceed": 34268
+     "proceed": 35380
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -1376,11 +1383,11 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "UNGOVERNED": {
     "actions": {
-     "proceed": 34278
+     "proceed": 35390
     },
     "ask_rate_on_accepted": 0.0,
     "breakeven_pi": 0.0,
@@ -1409,13 +1416,13 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "incumbent": {
     "actions": {
-     "ask": 394,
-     "block": 6476,
-     "proceed": 27408
+     "ask": 404,
+     "block": 6490,
+     "proceed": 28496
     },
     "ask_rate_on_accepted": 0.01115143516991092,
     "breakeven_pi": null,
@@ -1423,16 +1430,16 @@
     "catch_on_reverted": 0.0,
     "fbr_by_category": {
      "safety": {
-      "blocks": 4981,
+      "blocks": 4989,
       "blocks_on_accepted": 1916,
-      "blocks_on_accepted_share": 0.38466171451515757,
+      "blocks_on_accepted_share": 0.3840448987773101,
       "fbr": 0.3766463534499705,
       "n_accepted": 5087
      },
      "waste": {
-      "blocks": 1495,
+      "blocks": 1501,
       "blocks_on_accepted": 654,
-      "blocks_on_accepted_share": 0.43745819397993313,
+      "blocks_on_accepted_share": 0.435709526982012,
       "fbr": 0.06495828367103695,
       "n_accepted": 10068
      }
@@ -1445,7 +1452,7 @@
     "measured_pi": 0.0006594131223211342,
     "n_bounded": 29537,
     "n_decisive": 15165,
-    "n_scoreable": 34278
+    "n_scoreable": 35390
    },
    "membrane-table@1": {
     "actions": {

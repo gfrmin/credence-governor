@@ -25,6 +25,7 @@ from loss import DECISIVE, GroundedOutcome, merge_outcomes
 class BenchRecord:
     event_id: str
     log_index: int              # the tool-proposed record's arrival position
+    ts: float | None            # decide-time epoch seconds (None: pre-ts corpus)
     features: dict[str, str]
     action: str                 # the LOGGED (incumbent, shadow-mode) decision
     outcome: GroundedOutcome
@@ -34,10 +35,12 @@ class BenchRecord:
 def join(records: list[dict[str, Any]]) -> tuple[list[BenchRecord], dict[str, int]]:
     """BenchRecords in arrival order, plus orphan counts: decisions without
     a proposal, outcomes without a proposal, proposals without a decision."""
-    proposed: dict[str, tuple[int, dict[str, str]]] = {}
+    proposed: dict[str, tuple[int, dict[str, str], float | None]] = {}
     for i, r in enumerate(records):
         if r.get("event_type") == "tool-proposed" and isinstance(r.get("event_id"), str) and r.get("features"):
-            proposed[r["event_id"]] = (i, r["features"])
+            ts = r.get("ts")
+            proposed[r["event_id"]] = (
+                i, r["features"], float(ts) if isinstance(ts, (int, float)) else None)
     actions: dict[str, str] = {}
     orphan_decisions = 0
     outcomes: dict[str, list[dict[str, Any]]] = {}
@@ -57,7 +60,7 @@ def join(records: list[dict[str, Any]]) -> tuple[list[BenchRecord], dict[str, in
                 orphan_outcomes += 1
     rows: list[BenchRecord] = []
     undecided = 0
-    for eid, (idx, feats) in proposed.items():
+    for eid, (idx, feats, ts) in proposed.items():
         action = actions.get(eid)
         if action is None:
             undecided += 1
@@ -65,6 +68,7 @@ def join(records: list[dict[str, Any]]) -> tuple[list[BenchRecord], dict[str, in
         rows.append(BenchRecord(
             event_id=eid,
             log_index=idx,
+            ts=ts,
             features=feats,
             action=action,
             outcome=merge_outcomes(outcomes.get(eid, [])),

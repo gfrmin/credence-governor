@@ -63,7 +63,13 @@ def test_challenger_scored_on_intersection(results):
     assert mem["mean_loss"] is not None and not math.isnan(mem["mean_loss"])
 
 
-def test_bars_ship_unregistered(results):
-    assert results["bars"]["values"] == "UNREGISTERED"
-    clears = results["bars"]["clears"]["incumbent"]
-    assert all(v is None for v in clears.values())
+def test_bars_registered_at_rd14_close(results):
+    bars = results["bars"]
+    assert bars["values"] == {"waste": {"fbr_bar": 0.0005}}
+    assert bars["n_min"] == 1000
+    assert bars["window_days"] == 30
+    assert "rd14-close" in bars["registered"]
+    # the incumbent FAILS the waste bar (6.5% vs 0.05%); safety has no bar
+    assert bars["clears"]["incumbent"] == {"waste": False, "safety": None}
+    # the all-ask membrane clears vacuously (it never blocks)
+    assert bars["clears"]["membrane-table@1"]["waste"] is True

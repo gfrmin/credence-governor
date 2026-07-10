@@ -4,16 +4,16 @@ Scores governance decisions against GROUNDED OUTCOMES in the engine's own step-t
 
 ## Corpus
 
-- snapshot: `/home/g/.credence-governor/observations.jsonl` — 100882 lines, sha256 `b3ec4bb1122a489d…`, read 2026-07-10T19:41:18Z
-- joined decisions: **34278** (orphans: {'decisions_without_proposal': 0, 'outcomes_without_proposal': 0, 'proposals_without_decision': 0})
-- would-block rate: **18.89%**; decisive records (accepted ∪ reverted): **15165**; reverted: 10; outcome-justified blocks: **0**
+- snapshot: `/home/g/.credence-governor/observations.jsonl` — 105955 lines, sha256 `f5d87a72e6e853be…`, read 2026-07-10T22:51:20Z
+- joined decisions: **35390** (orphans: {'decisions_without_proposal': 0, 'outcomes_without_proposal': 0, 'proposals_without_decision': 0})
+- would-block rate: **18.34%**; decisive records (accepted ∪ reverted): **15165**; reverted: 10; outcome-justified blocks: **0**
 - drift note: the log grows live (the daemon keeps deciding); this table supersedes the roadmap's 2026-07-10 baseline — same shape, larger counts.
 
 | decision | accepted | reverted | ambiguous | hook-only | ungrounded | total |
 |---|---|---|---|---|---|---|
-| ask | 169 | 0 | 137 | 25 | 63 | 394 |
-| block | 2570 | 0 | 3102 | 19 | 785 | 6476 |
-| proceed | 12416 | 10 | 11133 | 1629 | 2220 | 27408 |
+| ask | 169 | 0 | 137 | 30 | 68 | 404 |
+| block | 2570 | 0 | 3102 | 25 | 793 | 6490 |
+| proceed | 12416 | 10 | 11133 | 2159 | 2778 | 28496 |
 
 ## Engines on the same corpus
 
@@ -24,16 +24,16 @@ Scores governance decisions against GROUNDED OUTCOMES in the engine's own step-t
 | incumbent | 0.08529 | [0.04388, 0.28485] | 6.50% | 37.66% | 1.12% | 0.00% | ∞ |
 | membrane-table@1 | 0.02000 | [0.02000, 0.02000] | 0.00% | 0.00% | 100.00% | 0.00% | ∞ |
 
-- challenger replay: proplang-govhost `table@1` — 33918 of 34278 decisions scored (replay snapshot sha256 `1fee4277bf624f5b…`; MANIFEST MISMATCH — intersection scoring)
+- challenger replay: proplang-govhost `table@1` — 33918 of 35390 decisions scored (replay snapshot sha256 `1fee4277bf624f5b…`; MANIFEST MISMATCH — intersection scoring)
 
-## The exit-from-shadow bar (SHAPE shipped; values UNREGISTERED)
+## The exit-from-shadow bar (REGISTERED: proplang tag rd14-close (2026-07-11))
 
-Enforcement returns per-category only when an engine's false-block rate on grounded outcomes clears a declared bar with a minimum evidence floor. The numeric bars are the author's R-D14 registration act; until then every row reads UNREGISTERED.
+Enforcement returns per-category only when an engine's false-block rate on grounded outcomes clears the declared bar with a minimum evidence floor, over the declared window (30 days rolling; rolling 30d: 0 stamped rows aged out; unstamped rows included (pre-ts corpus)). The safety category carries NO declared bar — deferred to the harm-channel ruling (this currency prices waste only) — so safety rows read —. A clear PERMITS enforcement in that category; it never compels it (promotion is Phase 4's separate act). Note the vacuous clear: an engine that never blocks (the all-ask membrane, UNGOVERNED) clears the block-FBR bar trivially — clearing says its BLOCKING is outcome-safe, nothing about its friction.
 
-| category | bar (FBR ≤) | n_min | incumbent clears? |
-|---|---|---|---|
-| safety | UNREGISTERED | 100 | — |
-| waste | UNREGISTERED | 100 | — |
+| category | bar (FBR ≤) | n_min | incumbent clears? | membrane-table@1 clears? |
+|---|---|---|---|---|
+| safety | — (deferred) | 1000 | — | — |
+| waste | 0.05% | 1000 | FAIL | PASS |
 
 ## The caveats register (binding on any reading of the numbers)
 

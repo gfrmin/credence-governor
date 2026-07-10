@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import queue
 import threading
+import time
 import uuid
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -379,7 +380,8 @@ class Daemon:
         event_id = str(payload.get("event_id") or _short_id("evt"))
         with self.lock:
             action = self.session.decide(features, features, payload.get("profile"))
-        self.log.append({"event_type": "tool-proposed", "event_id": event_id, "features": features})
+        self.log.append({"event_type": "tool-proposed", "event_id": event_id,
+                         "features": features, "ts": round(time.time(), 3)})
         self.log.append({"event_type": "decision", "in_response_to": event_id, "action": action})
         # shadow AFTER the appends (the membrane-shadow record's join target
         # exists) — enqueue-only, never in the response path.
@@ -556,7 +558,8 @@ class Daemon:
             features = self.features_for(event)
             with self.lock:
                 action = self.session.decide(features, features, event.get("profile"))
-            self.log.append({"event_type": "tool-proposed", "event_id": event_id, "features": features})
+            self.log.append({"event_type": "tool-proposed", "event_id": event_id,
+                             "features": features, "ts": round(time.time(), 3)})
             if action == "ask":
                 self._pending_asks[event_id] = features
             self._emit_decision(

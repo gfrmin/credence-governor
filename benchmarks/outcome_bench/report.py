@@ -164,23 +164,37 @@ def render(results: dict[str, Any]) -> str:
             "",
         ]
     bars = results["bars"]
+    registered = bars.get("registered", "UNREGISTERED")
     parts += [
-        "## The exit-from-shadow bar (SHAPE shipped; values UNREGISTERED)",
+        f"## The exit-from-shadow bar (REGISTERED: {registered})",
         "",
         "Enforcement returns per-category only when an engine's false-block "
-        "rate on grounded outcomes clears a declared bar with a minimum "
-        "evidence floor. The numeric bars are the author's R-D14 "
-        "registration act; until then every row reads UNREGISTERED.",
+        "rate on grounded outcomes clears the declared bar with a minimum "
+        "evidence floor, over the declared window "
+        f"({bars.get('window_days', '?')} days rolling; "
+        f"{bars.get('window_note', '')}). The safety category carries NO "
+        "declared bar — deferred to the harm-channel ruling (this currency "
+        "prices waste only) — so safety rows read —. A clear PERMITS "
+        "enforcement in that category; it never compels it (promotion is "
+        "Phase 4's separate act). Note the vacuous clear: an engine that "
+        "never blocks (the all-ask membrane, UNGOVERNED) clears the "
+        "block-FBR bar trivially — clearing says its BLOCKING is "
+        "outcome-safe, nothing about its friction.",
         "",
-        "| category | bar (FBR ≤) | n_min | incumbent clears? |",
-        "|---|---|---|---|",
+        "| category | bar (FBR ≤) | n_min | " + " | ".join(
+            f"{e} clears?" for e in ("incumbent", "membrane-table@1")) + " |",
+        "|---|---|---|---|---|",
     ]
-    incumbent_clears = bars["clears"].get("incumbent", {})
     cats = sorted(results["engines"]["incumbent"]["fbr_by_category"])
     for cat in cats:
-        verdict = incumbent_clears.get(cat)
-        parts.append(f"| {cat} | UNREGISTERED | {bars['n_min']} | "
-                     f"{'—' if verdict is None else verdict} |")
+        bar = bars["values"].get(cat, {}).get("fbr_bar")
+        bar_txt = f"{100 * bar:.2f}%" if bar is not None else "— (deferred)"
+        cells = []
+        for eng in ("incumbent", "membrane-table@1"):
+            v = bars["clears"].get(eng, {}).get(cat)
+            cells.append("—" if v is None else ("PASS" if v else "FAIL"))
+        parts.append(f"| {cat} | {bar_txt} | {bars['n_min']} | "
+                     + " | ".join(cells) + " |")
     parts += ["", CAVEATS]
     if "profile_sweep" in results:
         parts += ["## Profile sweep — mean loss $/decision under each buyer "
