@@ -21,6 +21,7 @@ from .log import ObservationLog
 from .safety import extract_safety
 from .schema import AgentToolEvent, Message, Session, event_and_session_from_payload
 from .session import BrainSession
+from .shadow import build_shadow_from_env
 
 __all__ = [
     "AgentToolEvent",
@@ -196,7 +197,15 @@ def run() -> None:
     skin = build_skin_client()  # prints engine provenance + any pull progress
     engine_lock = threading.Lock()
     session = BrainSession(skin, brain_dir, log)
-    daemon = Daemon(session, log, engine_lock, logline=lambda m: print(m, flush=True), capture=capture)
+    # The membrane shadow (None unless CREDENCE_MEMBRANE_COMMAND is set): mirrors
+    # every decide/verdict/outcome to the proplang govhost sessions, telemetry-only.
+    # BrainSession stays the unconditional primary.
+    shadow = build_shadow_from_env(brain_dir, log, _stdout)
+    if shadow is not None:
+        forms = ", ".join(shadow.stats()["forms"])
+        _stdout(f"credence-governor: membrane shadow ON ({forms})")
+    daemon = Daemon(session, log, engine_lock, logline=lambda m: print(m, flush=True),
+                    capture=capture, shadow=shadow)
 
     # Bind + serve BEFORE the ~18s engine boot. A duplicate daemon (e.g. a second
     # autostart) then fails fast here on EADDRINUSE instead of booting a whole second
@@ -211,6 +220,10 @@ def run() -> None:
             "already running there (check GET /ready). Not starting a second one."
         ) from err
 
+    # The shadow snapshots the log SYNCHRONOUSLY here — before any request is
+    # served — so its boot replay and the live submit stream cannot double-feed.
+    if shadow is not None:
+        shadow.start()
     daemon.start(httpd)
     try:
         _stdout(
@@ -233,6 +246,8 @@ def run() -> None:
     finally:
         httpd.shutdown()
         skin.shutdown()
+        if shadow is not None:
+            shadow.close()
 
 
 if __name__ == "__main__":
