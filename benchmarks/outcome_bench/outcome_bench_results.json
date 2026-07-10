@@ -1,0 +1,1486 @@
+{
+ "bars": {
+  "clears": {
+   "ORACLE": {
+    "safety": null,
+    "waste": null
+   },
+   "UNGOVERNED": {
+    "safety": null,
+    "waste": null
+   },
+   "incumbent": {
+    "safety": null,
+    "waste": null
+   },
+   "membrane-table@1": {
+    "safety": null,
+    "waste": null
+   }
+  },
+  "n_min": 100,
+  "values": "UNREGISTERED"
+ },
+ "challenger": {
+  "engine": {
+   "methods": [
+    "tick"
+   ],
+   "models": 3977,
+   "namespace_bits": 5.321928094887363,
+   "protocol": "membrane/1",
+   "version": "proplang-govhost"
+  },
+  "manifest": {
+   "n_lines": 98999,
+   "path": "/home/g/.credence-governor/observations.jsonl",
+   "read_at": "2026-07-10T18:06:20Z",
+   "sha256": "1fee4277bf624f5b13a71ba22c4223af5c3973aee1b3a92884fd301dc9ac062a"
+  },
+  "manifest_mismatch": true,
+  "scored_intersection": 33918
+ },
+ "corpus": {
+  "decisions": 34278,
+  "decisive": 15165,
+  "outcome_justified_blocks": 0,
+  "per_action": {
+   "ask": {
+    "accepted": 169,
+    "ambiguous": 137,
+    "hook-only": 25,
+    "ungrounded": 63
+   },
+   "block": {
+    "accepted": 2570,
+    "ambiguous": 3102,
+    "hook-only": 19,
+    "ungrounded": 785
+   },
+   "proceed": {
+    "accepted": 12416,
+    "ambiguous": 11133,
+    "hook-only": 1629,
+    "reverted": 10,
+    "ungrounded": 2220
+   }
+  },
+  "per_category_actions": {
+   "safety": {
+    "ask": 23,
+    "block": 4981,
+    "proceed": 7712
+   },
+   "waste": {
+    "ask": 371,
+    "block": 1495,
+    "proceed": 19696
+   }
+  },
+  "reverted_total": 10,
+  "would_block_rate": 0.18892584164770407
+ },
+ "engines": {
+  "ORACLE": {
+   "actions": {
+    "block": 10,
+    "proceed": 34268
+   },
+   "ask_rate_on_accepted": 0.0,
+   "breakeven_pi": 0.0,
+   "catch_on_reverted": 1.0,
+   "fbr_by_category": {
+    "safety": {
+     "blocks": 4,
+     "blocks_on_accepted": 0,
+     "blocks_on_accepted_share": 0.0,
+     "fbr": 0.0,
+     "n_accepted": 5087
+    },
+    "waste": {
+     "blocks": 6,
+     "blocks_on_accepted": 0,
+     "blocks_on_accepted_share": 0.0,
+     "fbr": 0.0,
+     "n_accepted": 10068
+    }
+   },
+   "mean_loss": 0.0,
+   "mean_loss_bounds": [
+    0.0,
+    0.24328807935809324
+   ],
+   "measured_pi": 0.0006594131223211342,
+   "n_bounded": 29537,
+   "n_decisive": 15165,
+   "n_scoreable": 34278
+  },
+  "UNGOVERNED": {
+   "actions": {
+    "proceed": 34278
+   },
+   "ask_rate_on_accepted": 0.0,
+   "breakeven_pi": 0.0,
+   "catch_on_reverted": 0.0,
+   "fbr_by_category": {
+    "safety": {
+     "blocks": 0,
+     "blocks_on_accepted": 0,
+     "blocks_on_accepted_share": null,
+     "fbr": 0.0,
+     "n_accepted": 5087
+    },
+    "waste": {
+     "blocks": 0,
+     "blocks_on_accepted": 0,
+     "blocks_on_accepted_share": null,
+     "fbr": 0.0,
+     "n_accepted": 10068
+    }
+   },
+   "mean_loss": 0.0003297065611605671,
+   "mean_loss_bounds": [
+    0.00016927920912753497,
+    0.24345735856722078
+   ],
+   "measured_pi": 0.0006594131223211342,
+   "n_bounded": 29537,
+   "n_decisive": 15165,
+   "n_scoreable": 34278
+  },
+  "incumbent": {
+   "actions": {
+    "ask": 394,
+    "block": 6476,
+    "proceed": 27408
+   },
+   "ask_rate_on_accepted": 0.01115143516991092,
+   "breakeven_pi": null,
+   "breakeven_pi_infinite": true,
+   "catch_on_reverted": 0.0,
+   "fbr_by_category": {
+    "safety": {
+     "blocks": 4981,
+     "blocks_on_accepted": 1916,
+     "blocks_on_accepted_share": 0.38466171451515757,
+     "fbr": 0.3766463534499705,
+     "n_accepted": 5087
+    },
+    "waste": {
+     "blocks": 1495,
+     "blocks_on_accepted": 654,
+     "blocks_on_accepted_share": 0.43745819397993313,
+     "fbr": 0.06495828367103695,
+     "n_accepted": 10068
+    }
+   },
+   "mean_loss": 0.08528717441477086,
+   "mean_loss_bounds": [
+    0.043881233706875945,
+    0.2848501878999237
+   ],
+   "measured_pi": 0.0006594131223211342,
+   "n_bounded": 29537,
+   "n_decisive": 15165,
+   "n_scoreable": 34278
+  },
+  "membrane-table@1": {
+   "actions": {
+    "ask": 33918
+   },
+   "ask_rate_on_accepted": 1.0,
+   "breakeven_pi": null,
+   "breakeven_pi_infinite": true,
+   "catch_on_reverted": 0.0,
+   "fbr_by_category": {
+    "safety": {
+     "blocks": 0,
+     "blocks_on_accepted": 0,
+     "blocks_on_accepted_share": null,
+     "fbr": 0.0,
+     "n_accepted": 5087
+    },
+    "waste": {
+     "blocks": 0,
+     "blocks_on_accepted": 0,
+     "blocks_on_accepted_share": null,
+     "fbr": 0.0,
+     "n_accepted": 10068
+    }
+   },
+   "mean_loss": 0.02,
+   "mean_loss_bounds": [
+    0.01999999999999163,
+    0.01999999999999163
+   ],
+   "measured_pi": 0.0006594131223211342,
+   "n_bounded": 29537,
+   "n_decisive": 15165,
+   "n_scoreable": 33918
+  }
+ },
+ "manifest": {
+  "n_lines": 100882,
+  "path": "/home/g/.credence-governor/observations.jsonl",
+  "read_at": "2026-07-10T19:41:18Z",
+  "sha256": "b3ec4bb1122a489dff821e208b72d45e40580efa39175191f745b746cdb30600"
+ },
+ "orphans": {
+  "decisions_without_proposal": 0,
+  "outcomes_without_proposal": 0,
+  "proposals_without_decision": 0
+ },
+ "profile_sweep": {
+  "balanced": {
+   "ORACLE": {
+    "actions": {
+     "block": 10,
+     "proceed": 34268
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 1.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 6,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0,
+    "mean_loss_bounds": [
+     0.0,
+     0.24328807935809324
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "UNGOVERNED": {
+    "actions": {
+     "proceed": 34278
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0003297065611605671,
+    "mean_loss_bounds": [
+     0.00016927920912753497,
+     0.24345735856722078
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "incumbent": {
+    "actions": {
+     "ask": 394,
+     "block": 6476,
+     "proceed": 27408
+    },
+    "ask_rate_on_accepted": 0.01115143516991092,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4981,
+      "blocks_on_accepted": 1916,
+      "blocks_on_accepted_share": 0.38466171451515757,
+      "fbr": 0.3766463534499705,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 1495,
+      "blocks_on_accepted": 654,
+      "blocks_on_accepted_share": 0.43745819397993313,
+      "fbr": 0.06495828367103695,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.08528717441477086,
+    "mean_loss_bounds": [
+     0.043881233706875945,
+     0.2848501878999237
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "membrane-table@1": {
+    "actions": {
+     "ask": 33918
+    },
+    "ask_rate_on_accepted": 1.0,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.02,
+    "mean_loss_bounds": [
+     0.01999999999999163,
+     0.01999999999999163
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 33918
+   }
+  },
+  "cost-saver": {
+   "ORACLE": {
+    "actions": {
+     "block": 10,
+     "proceed": 34268
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 1.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 6,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0,
+    "mean_loss_bounds": [
+     0.0,
+     0.24328807935809324
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "UNGOVERNED": {
+    "actions": {
+     "proceed": 34278
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0003297065611605671,
+    "mean_loss_bounds": [
+     0.00016927920912753497,
+     0.24345735856722078
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "incumbent": {
+    "actions": {
+     "ask": 394,
+     "block": 6476,
+     "proceed": 27408
+    },
+    "ask_rate_on_accepted": 0.01115143516991092,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4981,
+      "blocks_on_accepted": 1916,
+      "blocks_on_accepted_share": 0.38466171451515757,
+      "fbr": 0.3766463534499705,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 1495,
+      "blocks_on_accepted": 654,
+      "blocks_on_accepted_share": 0.43745819397993313,
+      "fbr": 0.06495828367103695,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.022070557204088362,
+    "mean_loss_bounds": [
+     0.011563462775501965,
+     0.21314960896502755
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "membrane-table@1": {
+    "actions": {
+     "ask": 33918
+    },
+    "ask_rate_on_accepted": 1.0,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.05,
+    "mean_loss_bounds": [
+     0.04999999999997307,
+     0.04999999999997307
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 33918
+   }
+  },
+  "fintech-safety": {
+   "ORACLE": {
+    "actions": {
+     "block": 10,
+     "proceed": 34268
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 1.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 6,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0,
+    "mean_loss_bounds": [
+     0.0,
+     0.24328807935809324
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "UNGOVERNED": {
+    "actions": {
+     "proceed": 34278
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0003297065611605671,
+    "mean_loss_bounds": [
+     0.00016927920912753497,
+     0.24345735856722078
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "incumbent": {
+    "actions": {
+     "ask": 394,
+     "block": 6476,
+     "proceed": 27408
+    },
+    "ask_rate_on_accepted": 0.01115143516991092,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4981,
+      "blocks_on_accepted": 1916,
+      "blocks_on_accepted_share": 0.38466171451515757,
+      "fbr": 0.3766463534499705,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 1495,
+      "blocks_on_accepted": 654,
+      "blocks_on_accepted_share": 0.43745819397993313,
+      "fbr": 0.06495828367103695,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.17002176063303662,
+    "mean_loss_bounds": [
+     0.08738599045265241,
+     0.3808653553170617
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "membrane-table@1": {
+    "actions": {
+     "ask": 33918
+    },
+    "ask_rate_on_accepted": 1.0,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.02,
+    "mean_loss_bounds": [
+     0.01999999999999163,
+     0.01999999999999163
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 33918
+   }
+  },
+  "indie-hacker": {
+   "ORACLE": {
+    "actions": {
+     "block": 10,
+     "proceed": 34268
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 1.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 6,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0,
+    "mean_loss_bounds": [
+     0.0,
+     0.24328807935809324
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "UNGOVERNED": {
+    "actions": {
+     "proceed": 34278
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0003297065611605671,
+    "mean_loss_bounds": [
+     0.00016927920912753497,
+     0.24345735856722078
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "incumbent": {
+    "actions": {
+     "ask": 394,
+     "block": 6476,
+     "proceed": 27408
+    },
+    "ask_rate_on_accepted": 0.01115143516991092,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4981,
+      "blocks_on_accepted": 1916,
+      "blocks_on_accepted_share": 0.38466171451515757,
+      "fbr": 0.3766463534499705,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 1495,
+      "blocks_on_accepted": 654,
+      "blocks_on_accepted_share": 0.43745819397993313,
+      "fbr": 0.06495828367103695,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.021736234751071545,
+    "mean_loss_bounds": [
+     0.011252666147543753,
+     0.21283881233706953
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "membrane-table@1": {
+    "actions": {
+     "ask": 33918
+    },
+    "ask_rate_on_accepted": 1.0,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.02,
+    "mean_loss_bounds": [
+     0.01999999999999163,
+     0.01999999999999163
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 33918
+   }
+  },
+  "quality-first": {
+   "ORACLE": {
+    "actions": {
+     "block": 10,
+     "proceed": 34268
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 1.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 6,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0,
+    "mean_loss_bounds": [
+     0.0,
+     0.24328807935809324
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "UNGOVERNED": {
+    "actions": {
+     "proceed": 34278
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0003297065611605671,
+    "mean_loss_bounds": [
+     0.00016927920912753497,
+     0.24345735856722078
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "incumbent": {
+    "actions": {
+     "ask": 394,
+     "block": 6476,
+     "proceed": 27408
+    },
+    "ask_rate_on_accepted": 0.01115143516991092,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4981,
+      "blocks_on_accepted": 1916,
+      "blocks_on_accepted_share": 0.38466171451515757,
+      "fbr": 0.3766463534499705,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 1495,
+      "blocks_on_accepted": 654,
+      "blocks_on_accepted_share": 0.43745819397993313,
+      "fbr": 0.06495828367103695,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.17091328717441479,
+    "mean_loss_bounds": [
+     0.0882147814605406,
+     0.38169414632494947
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "membrane-table@1": {
+    "actions": {
+     "ask": 33918
+    },
+    "ask_rate_on_accepted": 1.0,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.1,
+    "mean_loss_bounds": [
+     0.09999999999994615,
+     0.09999999999994615
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 33918
+   }
+  },
+  "quality-research": {
+   "ORACLE": {
+    "actions": {
+     "block": 10,
+     "proceed": 34268
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 1.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 6,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0,
+    "mean_loss_bounds": [
+     0.0,
+     0.24328807935809324
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "UNGOVERNED": {
+    "actions": {
+     "proceed": 34278
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0003297065611605671,
+    "mean_loss_bounds": [
+     0.00016927920912753497,
+     0.24345735856722078
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "incumbent": {
+    "actions": {
+     "ask": 394,
+     "block": 6476,
+     "proceed": 27408
+    },
+    "ask_rate_on_accepted": 0.01115143516991092,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4981,
+      "blocks_on_accepted": 1916,
+      "blocks_on_accepted_share": 0.38466171451515757,
+      "fbr": 0.3766463534499705,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 1495,
+      "blocks_on_accepted": 654,
+      "blocks_on_accepted_share": 0.43745819397993313,
+      "fbr": 0.06495828367103695,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.17002176063303662,
+    "mean_loss_bounds": [
+     0.08738599045265241,
+     0.3808653553170617
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "membrane-table@1": {
+    "actions": {
+     "ask": 33918
+    },
+    "ask_rate_on_accepted": 1.0,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.02,
+    "mean_loss_bounds": [
+     0.01999999999999163,
+     0.01999999999999163
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 33918
+   }
+  },
+  "regulated-enterprise": {
+   "ORACLE": {
+    "actions": {
+     "block": 10,
+     "proceed": 34268
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 1.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 6,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0,
+    "mean_loss_bounds": [
+     0.0,
+     0.24328807935809324
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "UNGOVERNED": {
+    "actions": {
+     "proceed": 34278
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0003297065611605671,
+    "mean_loss_bounds": [
+     0.00016927920912753497,
+     0.24345735856722078
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "incumbent": {
+    "actions": {
+     "ask": 394,
+     "block": 6476,
+     "proceed": 27408
+    },
+    "ask_rate_on_accepted": 0.01115143516991092,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4981,
+      "blocks_on_accepted": 1916,
+      "blocks_on_accepted_share": 0.38466171451515757,
+      "fbr": 0.3766463534499705,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 1495,
+      "blocks_on_accepted": 654,
+      "blocks_on_accepted_share": 0.43745819397993313,
+      "fbr": 0.06495828367103695,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.17002176063303662,
+    "mean_loss_bounds": [
+     0.08738599045265241,
+     0.3808653553170617
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "membrane-table@1": {
+    "actions": {
+     "ask": 33918
+    },
+    "ask_rate_on_accepted": 1.0,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.02,
+    "mean_loss_bounds": [
+     0.01999999999999163,
+     0.01999999999999163
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 33918
+   }
+  },
+  "speed-first": {
+   "ORACLE": {
+    "actions": {
+     "block": 10,
+     "proceed": 34268
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 1.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 6,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0,
+    "mean_loss_bounds": [
+     0.0,
+     0.24328807935809324
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "UNGOVERNED": {
+    "actions": {
+     "proceed": 34278
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0003297065611605671,
+    "mean_loss_bounds": [
+     0.00016927920912753497,
+     0.24345735856722078
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "incumbent": {
+    "actions": {
+     "ask": 394,
+     "block": 6476,
+     "proceed": 27408
+    },
+    "ask_rate_on_accepted": 0.01115143516991092,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4981,
+      "blocks_on_accepted": 1916,
+      "blocks_on_accepted_share": 0.38466171451515757,
+      "fbr": 0.3766463534499705,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 1495,
+      "blocks_on_accepted": 654,
+      "blocks_on_accepted_share": 0.43745819397993313,
+      "fbr": 0.06495828367103695,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0906363336630399,
+    "mean_loss_bounds": [
+     0.04885397975420659,
+     0.2898229339472526
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "membrane-table@1": {
+    "actions": {
+     "ask": 33918
+    },
+    "ask_rate_on_accepted": 1.0,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.5,
+    "mean_loss_bounds": [
+     0.5,
+     0.5
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 33918
+   }
+  },
+  "startup-balanced": {
+   "ORACLE": {
+    "actions": {
+     "block": 10,
+     "proceed": 34268
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 1.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 6,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": 0.0,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0,
+    "mean_loss_bounds": [
+     0.0,
+     0.24328807935809324
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "UNGOVERNED": {
+    "actions": {
+     "proceed": 34278
+    },
+    "ask_rate_on_accepted": 0.0,
+    "breakeven_pi": 0.0,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.0003297065611605671,
+    "mean_loss_bounds": [
+     0.00016927920912753497,
+     0.24345735856722078
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "incumbent": {
+    "actions": {
+     "ask": 394,
+     "block": 6476,
+     "proceed": 27408
+    },
+    "ask_rate_on_accepted": 0.01115143516991092,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 4981,
+      "blocks_on_accepted": 1916,
+      "blocks_on_accepted_share": 0.38466171451515757,
+      "fbr": 0.3766463534499705,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 1495,
+      "blocks_on_accepted": 654,
+      "blocks_on_accepted_share": 0.43745819397993313,
+      "fbr": 0.06495828367103695,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.08528717441477086,
+    "mean_loss_bounds": [
+     0.043881233706875945,
+     0.2848501878999237
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 34278
+   },
+   "membrane-table@1": {
+    "actions": {
+     "ask": 33918
+    },
+    "ask_rate_on_accepted": 1.0,
+    "breakeven_pi": null,
+    "breakeven_pi_infinite": true,
+    "catch_on_reverted": 0.0,
+    "fbr_by_category": {
+     "safety": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 5087
+     },
+     "waste": {
+      "blocks": 0,
+      "blocks_on_accepted": 0,
+      "blocks_on_accepted_share": null,
+      "fbr": 0.0,
+      "n_accepted": 10068
+     }
+    },
+    "mean_loss": 0.02,
+    "mean_loss_bounds": [
+     0.01999999999999163,
+     0.01999999999999163
+    ],
+    "measured_pi": 0.0006594131223211342,
+    "n_bounded": 29537,
+    "n_decisive": 15165,
+    "n_scoreable": 33918
+   }
+  }
+ }
+}
