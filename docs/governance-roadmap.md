@@ -20,11 +20,36 @@ D (the latent-utility pilot, outcome-grounded) are closed under author tags
 generations — `table@1` (declared step-table utility) and `latent@1` (learned
 utility over declared channels).
 
-What is NOT yet true is the thing the programme was for: the live governor on this
-machine — `credence-governor.service`, ~30k real Claude Code decisions — still
-decides entirely on the Julia credence-skin engine. The proplang path exists only
-as `membrane.py`'s shadow `MembraneSession` (table@1, waste-only, never wired into
-`run()`). This document is the path from that state to proplang actually governing.
+What is NOT yet true is the thing the programme was for: the governor on this
+machine — `credence-governor.service`, ~30k real Claude Code decisions — decides
+entirely on the Julia credence-skin engine, and **in shadow mode**
+(`CREDENCE_GOVERNOR_SHADOW=1`: the hook narrates "would block", never enforces),
+demoted from enforcement because it blocked too often. The proplang path exists
+only as `membrane.py`'s shadow `MembraneSession` (table@1, waste-only, never wired
+into `run()`). This document is the path from that state — an advisory engine
+nobody lets enforce — to proplang actually governing.
+
+## The first outcome-scored reading (2026-07-10, shadow counterfactuals)
+
+Shadow mode has one great virtue: every decision has a realized counterfactual —
+the tool ran regardless, so grounded outcomes score the decisions directly. The
+Phase-0 grounding backfill (29,455 outcome records over the 60 GB capture) gives
+the incumbent engine its first outcome-scored reading:
+
+| Shadow decision | Grounded | Accepted (kept) | Reverted | Ambiguous |
+|---|---|---|---|---|
+| proceed (24,023) | 23,485 | 12,398 | **10** | 11,077 |
+| block (6,436) | 5,672 | 2,570 (45%) | **0** | 3,102 |
+| ask (342) | 304 | 169 | 0 | 135 |
+
+The would-block rate is **21%** — the "blocked too often" that got enforcement
+turned off, now quantified. Of 5,672 grounded would-blocks, **not one** was
+reverted, and 45% were plainly accepted (completed, kept). Caveats: "ambiguous"
+is the structural classifier's can't-tell bucket, and acceptance does not strictly
+disprove a *waste* label (a kept call can still have been low-value) — but as
+justification for blocking, the outcome evidence is currently zero. This table is
+exactly the shape the Phase-1 bench formalizes, and the baseline any challenger
+engine has to beat.
 
 ## The blocker structure (read this before the phases)
 
@@ -77,6 +102,11 @@ test-membrane locale fix.
 Exit criterion: the interregnum line on the register closes — the membrane's field
 performance is measurable by a registered standard.
 
+The bench also defines the **exit from shadow mode**: enforcement was turned off
+because the incumbent blocked too often, and it comes back per-category only when
+an engine's false-block rate on grounded outcomes clears a declared bar. That makes
+"the governor is allowed to govern again" a measured milestone, not a mood.
+
 ## Phase 2 — the membrane shadows live traffic on latent@1 (builder; admissions author's)
 
 Wire `MembraneSession` as a shadow beside every live decide, and upgrade the
@@ -95,7 +125,10 @@ Score BOTH engines on the Phase-1 metric over the same traffic; keep
 ask-rate against the recorded field prediction (hosts-d-task3-report §2a: the
 governor under this utility model asks rarely, through the verdict channel,
 essentially only at decision boundaries — the field's number confirms or falsifies
-a stated prior).
+a stated prior). The incumbent's measured 21% would-block rate with zero
+outcome-justified blocks is precisely the shortfall shape the membrane's
+VoI-priced asking is predicted to avoid — Phase 2 is where that prediction meets
+the same traffic that demoted the incumbent.
 
 Exit criterion: a shadow window long enough to compare engines on the registered
 metric, plus the ask-rate reading.
