@@ -3,20 +3,46 @@
 #
 # Applies rd14-boundary.patch (the five reviewed edits), runs the gates,
 # re-signs MANIFEST.sha256 over the SAME file census, commits and tags with
-# the AUTHOR key, and pushes. Every irreversible step asks first; abort at
-# any prompt and `git -C ~/git/proplang checkout -- . ` restores the tree.
+# the AUTHOR key, and pushes.
 #
-# Usage:  bash rd14-boundary.sh [path/to/rd14-boundary.patch]
-#         (default: the patch sitting next to this script)
+# Usage:  bash rd14-boundary.sh [--yes] [path/to/rd14-boundary.patch]
+#
+#   --yes   skip the interactive confirmations (for non-TTY shells, e.g.
+#           Claude Code's `!` prefix) — use only after reviewing the diff.
+#
+# RESUMABLE: if the patch is already applied (a previous run stopped at a
+# prompt), the script detects that and continues from the gates. Abort at
+# any prompt and `git -C ~/git/proplang checkout -- .` restores the tree.
 
 set -euo pipefail
 
 REPO="${PROPLANG_DIR:-$HOME/git/proplang}"
-PATCH="${1:-$(dirname "$(readlink -f "$0")")/rd14-boundary.patch}"
 TAG="rd14-close"
 AUTHOR_FPR="SHA256:Sfh8OBG9CtkTF/y8rch4Cf6wv1rCpJ8ymEtKilUucsY"
 
+YES=0
+PATCH=""
+for arg in "$@"; do
+    case "$arg" in
+        --yes) YES=1 ;;
+        *) PATCH="$arg" ;;
+    esac
+done
+[ -n "$PATCH" ] || PATCH="$(dirname "$(readlink -f "$0")")/rd14-boundary.patch"
+
 confirm() {
+    if [ "$YES" = 1 ]; then
+        echo "   $1  [--yes]"
+        return 0
+    fi
+    if [ ! -t 0 ]; then
+        echo "NON-INTERACTIVE SHELL and no --yes flag."
+        echo "Review the diff (git -C $REPO diff), then re-run with --yes:"
+        echo "   bash $0 --yes"
+        echo "Nothing signed, nothing pushed. To undo the applied patch:"
+        echo "   git -C $REPO checkout -- ."
+        exit 1
+    fi
     local ans
     read -r -p "$1 [type yes to continue] " ans
     [ "$ans" = "yes" ] || { echo "aborted — nothing pushed."; exit 1; }
@@ -26,7 +52,6 @@ cd "$REPO"
 
 echo "== 0. preconditions"
 [ -f "$PATCH" ] || { echo "ERROR: patch not found: $PATCH"; exit 1; }
-[ -z "$(git status --porcelain)" ] || { echo "ERROR: tree not clean — commit/stash first"; exit 1; }
 if git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
     echo "ERROR: tag $TAG already exists"; exit 1
 fi
@@ -44,18 +69,32 @@ if [ "$FPR" != "$AUTHOR_FPR" ]; then
     echo "ERROR: fingerprint is not the author key ($AUTHOR_FPR)"; exit 1
 fi
 
-echo "== 1. pre-check: the manifest verifies over the frozen tree"
-sha256sum --quiet -c MANIFEST.sha256
-N_ROWS=$(wc -l < MANIFEST.sha256)
-echo "   manifest OK ($N_ROWS rows)"
+ALREADY_APPLIED=0
+if [ -n "$(git status --porcelain)" ]; then
+    # dirty tree: acceptable ONLY if the dirt is exactly this patch
+    if git apply --reverse --check "$PATCH" 2>/dev/null; then
+        ALREADY_APPLIED=1
+        echo "   patch already applied (previous run) — resuming"
+    else
+        echo "ERROR: tree has changes that are NOT this patch — resolve first"
+        exit 1
+    fi
+fi
 
-echo "== 2. applying the patch"
-git apply --check "$PATCH"
-git apply "$PATCH"
+if [ "$ALREADY_APPLIED" = 0 ]; then
+    echo "== 1. pre-check: the manifest verifies over the frozen tree"
+    sha256sum --quiet -c MANIFEST.sha256
+    echo "   manifest OK ($(wc -l < MANIFEST.sha256) rows)"
+    echo "== 2. applying the patch"
+    git apply --check "$PATCH"
+    git apply "$PATCH"
+else
+    echo "== 1-2. skipped (patch already applied; manifest re-check happens post-re-sign)"
+fi
+N_ROWS=$(wc -l < MANIFEST.sha256)
 git --no-pager diff --stat
 echo
-echo "   Review the full diff now (in another window):  git -C $REPO diff"
-confirm "The five edits look right?"
+confirm "The five edits look right (full diff: git -C $REPO diff)?"
 
 echo "== 3. gates: cabal test all (the locale rename must stay green; takes a while)"
 export PATH="$HOME/.ghcup/bin:$PATH"
