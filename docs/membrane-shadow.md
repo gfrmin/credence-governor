@@ -180,13 +180,17 @@ contexts. Roadmap Phase 2 already demoted agreement-% to a shadow sanity
 check (R-D14); whether the 0.95 threshold or the gate's exit-code role
 should change is the author's ruling, not tuned here.
 
-Operational note from the same run: on the governor's 3,977-model world the
-measured tick cost is ~75 ms (the frozen 8.26 ms benchmark was the toy
-1,241-model world), so the table@1 shadow's row-replay warm boot is ~49 min
-and the latent shadow's per-tick log outcome replay is comparable, growing
-with the log — worker-thread time only; the primary is unaffected, and
-boot-window queue drops are counted telemetry. The `membrane-shadow`
-records' `latency_ms` measures the real per-decide cost in the field.
+Operational notes, measured (2026-07-10 field deploy): on the governor's
+3,977-model world a v1 WORLD evidence tick costs ~75 ms (the frozen 8.26 ms
+benchmark was the toy 1,241-model world), so the table@1 shadow's 39k-row
+warm replay boots in ~49 min — worker-thread time only; decides arriving
+before a form is alive are lost for that form (counted posture). The
+latent@1 shadow, by contrast, booted in SECONDS: outcome and verdict-pointer
+ticks condition only the small utility agents, not the world enumeration —
+the log's ~15.7k decisive outcome replays are cheap. Measured live latent
+decide latency: p50 4.4 ms. Crash injection verified in the field: killing
+the govhost mid-boot left the primary /decide at ~170 ms full-featured,
+journal shows dead + respawn 1/3 in 60 s.
 
 ## 5. Deployment provenance
 
