@@ -38,6 +38,14 @@ stake-bearing `said` form (the test-d fixture's `If (Call IsEq …)` shape) is
 NOT wire-expressible today; growing `pSaid` is proplang-side work that only
 the author can open — Phase-3 material, now with a measured demand shape.
 
+> **Field outcome, 2026-07-22 — read §6.2 before relying on this section.** The
+> latent@1 prediction above HELD exactly (94,988/94,988 block, ask-rate 0). The
+> co-shadow claim did NOT: **table@1 is also degenerate**, firing `ask` on
+> 94,936/94,936 decisions, because `p1` rails at the `thetaPoints` ceiling of
+> 0.9. The prediction is left unedited here — it was put on the record before
+> the run, and its being half-wrong is itself the result. §6.2 carries the
+> reading; §6.3 carries the retirement recommendation it implies.
+
 ## 1. The latent@1 declaration (`membrane.latent_utility_decl`)
 
 ```json
@@ -217,3 +225,125 @@ At first field deploy: proplang tag `d-close`, sha256
 `96ec3de7a59100c8d46d569452af0f379ee6f0e44036f7706e8282af1ffd6c18`
 (recorded in `deploy/membrane.conf`; re-record on refresh). Rollback of the
 whole shadow = remove the drop-in + restart.
+
+## 6. Provenance resolved + the field reading (2026-07-22)
+
+Written for the proplang-migration Phase 0 (`credence/docs/superpowers/specs/
+2026-07-20-proplang-migration-phase-0-design.md`, W3′). Two things were owed
+here: the binary's provenance stated precisely enough to act on, and an explicit
+keep-or-retire decision. Both below. Everything measured was re-derived against
+proplang's CURRENT tree, not the historical record.
+
+### 6.1 Provenance — drift by deliberate upstream retirement, not loss
+
+18. **The binary is exactly what §5 says it is.** Verified 2026-07-22:
+    `sha256sum ~/.local/bin/proplang-govhost` =
+    `96ec3de7a59100c8d46d569452af0f379ee6f0e44036f7706e8282af1ffd6c18`,
+    byte-matching `deploy/membrane.conf`. Built 2026-07-10, still the live
+    `CREDENCE_MEMBRANE_COMMAND`; the unit is `active` with
+    `CREDENCE_MEMBRANE_UTILITY=table@1,latent@1`.
+19. **The source is NOT off master — the earlier reading was wrong.** Tag
+    `d-close` = `6afa24f`; `git merge-base --is-ancestor d-close master` returns
+    true and `git branch --contains d-close` lists `master`. The full tree is
+    reachable from master's history. Rebuild is
+    `git checkout d-close && cabal build proplang-govhost`, then the §5 install
+    line. The artifact is reproducible; nothing is lost.
+20. **What actually happened is a RETIREMENT, upstream, at a named boundary.**
+    Commit `3eb291a` (step-3 Phase B, D3 retirements) removed the
+    `proplang-govhost` executable, `host-governor/{Main,Wire,WireU}.hs` and
+    `test-govhost/` from the cabal together, and — the phrase is in the commit
+    message — "THE HOST-LESS WINDOW is stated in their place (D3 rider 2)". The
+    window's exit arrived later at `c4aa9bb` (step-7) as a DIFFERENT executable,
+    `proplang-host`, serving a different wire. So this is not a binary that
+    drifted behind a moving target; it is the last build of a product line
+    proplang deliberately ended. That distinction matters for item 22: there is
+    no "refresh the binary" option, because there is nothing to refresh it to.
+21. **Wire divergence is total, not partial.** Current `Host.hs:252` matches
+    `JStr "said@1" <- oGet "form" u` and nothing else. The two forms this
+    shadow speaks — `table@1` and `latent@1` — are both unaccepted by current
+    `proplang-host`. There is no migration path for this deployment that
+    consists of swapping the binary: the adapter would have to be rewritten to
+    `said@1`, which is Phase 1 work in the migration spec, not housekeeping.
+
+### 6.2 The field reading — both shadows are constant policies
+
+Measured 2026-07-22 over `~/.credence-governor/observations.jsonl`
+(189,858 `membrane-shadow` records; 94,988 `latent@1` + 94,936 `table@1`,
+vastly past the registered `n_min` of 1,000).
+
+22. **`latent@1`: the §0 stated prediction held exactly.** `block` on
+    94,988 of 94,988 decisions; ask-rate exactly 0. The reasoning in §0 — that
+    `upSaid = Var (S Z)` is action-degenerate and that the R1 menu order then
+    fully determines `block` — is confirmed at field scale. The wire agrees in
+    its own readout: `sensitivity` is `false` on every one of the 94,988
+    records, which is the driver reporting per-tick that no information could
+    change the decision. This is the instrument working, and its reading is in.
+23. **`table@1` is ALSO degenerate — and that was NOT predicted.** `ask` on
+    94,936 of 94,936 decisions. §0 and `deploy/membrane.conf` both describe
+    `table@1` as "the non-degenerate challenger policy the Phase-1 outcome
+    bench scores." Its own field data falsifies that description. A challenger
+    that asks on 100% of ticks is not a policy the bench can score against
+    `bar_waste` — its waste is maximal by construction and its comparison to
+    the Julia primary carries no information. **This invalidates the premise of
+    Phase 2's exit criterion**, which is "a shadow window long enough to
+    compare engines": the window is 95k decisions long and there is nothing in
+    it to compare.
+24. **Why it is constant: `p1` is railed at the enumeration ceiling.**
+    Across both forms `p1` takes exactly TWO values in 190k live decisions —
+    `0.8999999999999999` (93,719 table / 93,781 latent) and `~0.4975` (1,207
+    each, the post-boot cold plateau; they recur after RESPAWN, not only at
+    first boot). `entropy_bits` takes exactly ONE value across all of them
+    (`0.16793331045523305`), as does `residual_mean` (`0.154`). The high
+    plateau is `thetaPoints`' top rung: the wire runs a myopic `choose` over a
+    hard-wired grid whose maximum is 0.9, and the posterior saturates there
+    almost immediately and never leaves.
+25. **The ceiling reading transfers to CURRENT proplang, and this is the
+    load-bearing fact.** `thetaPoints = 0.1 :| [0.2 .. 0.9]` is byte-identical
+    at `d-close` (`Enumerate.hs:95-96`) and at master (`Enumerate.hs:127`) —
+    unchanged across all four boundaries since (wire, R, W3, W4). So although
+    everything else here measures a retired binary, the mechanism producing the
+    rail is the one current `proplang-host` still uses. **This is field evidence
+    for proplang issue #19** (the fragment route: `Purchase`/`Lattice` ship in
+    `src` but `Host.hs` routes nothing through them, so the wire ceiling stays
+    0.9): the issue argues the ceiling blocks a 0.96-threshold host in
+    principle; these 190k decisions are that block, observed. Worth adding to
+    #19 if the author wants the demand evidenced rather than argued.
+26. **Scope caveat, stated so it cannot be over-read.** What is measured is
+    `table@1`/`latent@1` on the retired driver. It is NOT a measurement of
+    `said@1` on current `proplang-host`, and it does not settle the migration
+    spec's W1′ question (does `p1` discriminate on real governance features
+    through the CURRENT wire). It does establish that the shared ceiling
+    mechanism is capable of flattening `p1` completely on this corpus, which is
+    a live hypothesis W1′ must now be designed to distinguish — a railed `p1`
+    there would be the ceiling, not a feature-encoding verdict.
+
+### 6.3 Keep-or-retire — recommendation: RETIRE the shadow, keep the binary
+
+27. **FLAG (author's ruling; the one option closed off is leaving it
+    undecided).** Recommendation: **stop the shadow, keep everything else.**
+    Grounds: both forms have now returned their readings and both readings are
+    constants. `latent@1` confirmed its stated prediction and, as a
+    falsification instrument, is spent — an instrument that has fired does not
+    need to keep firing. `table@1`'s reading is that it is not the
+    non-degenerate challenger it was deployed as, so it cannot serve the
+    Phase-2 comparison it was deployed for. Continued accumulation buys no new
+    information — each further tick is a re-observation of a constant — while
+    costing worker-thread time, ~190k records of log volume against a
+    163 MB log that every boot replay must walk, and the standing single-worker
+    respawn-drop posture of item 14. Retire = delete the
+    `membrane.conf` drop-in + restart, per §5; zero behaviour change on the
+    primary, which item 17 already establishes was never downstream of any of
+    this.
+28. **What retiring must NOT discard.** Keep the binary at its recorded sha
+    (item 18), keep `d-close` reachable (item 19), and keep this register —
+    items 22-25 are the results, and they are what the shadow was for. Keep
+    `training/shadow_report.py` and `benchmarks/outcome_bench/replay.py`
+    working against the existing 190k records; the corpus does not go away when
+    the producer stops. The re-entry path is a config change, exactly as §5
+    and item 14 describe.
+29. **What replaces it is not another `table@1` window.** If a shadow
+    comparison is still wanted, the successor is a `said@1` shadow against
+    current `proplang-host` — which is the migration spec's Phase 1, gated on
+    W1′ and on issue #19's disposition, not something to schedule from here.
+    Standing up another instance of the retired wire would re-run a finished
+    experiment.
