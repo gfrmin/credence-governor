@@ -1,5 +1,16 @@
 # The membrane shadow — host declaration register (Phase 2)
 
+> **RETIRED 2026-07-22, on the author's ruling — the shadow no longer runs.**
+> The `membrane.conf` drop-in was uninstalled and the daemon restarted; both
+> govhost children exited, no `membrane-shadow` record has been written since,
+> and the primary was unaffected. Final corpus: **190,102 records** (95,072
+> `latent@1` + 95,030 `table@1`). The binary, the tag, the corpus, and its
+> consumers are all kept — see §6.3 item 28. **This register is now a record of
+> a completed experiment, not a description of a running system.** Read §6
+> before acting on anything above it; several claims in §0–§4 are present-tense
+> about a deployment that has stopped, and one of them (§0's "non-degenerate
+> challenger") was falsified by the run.
+
 Status: as-built, 2026-07-10 (branch `feat/latent-shadow`). This is the
 question→resolution→why register for every host-declared value and rule the
 Phase-2 shadow fixes (governance-roadmap.md Phase 2). Everything here is
@@ -319,8 +330,15 @@ vastly past the registered `n_min` of 1,000).
 
 ### 6.3 Keep-or-retire — recommendation: RETIRE the shadow, keep the binary
 
-27. **FLAG (author's ruling; the one option closed off is leaving it
-    undecided).** Recommendation: **stop the shadow, keep everything else.**
+27. **RULED AND EXECUTED 2026-07-22 — the author ruled "retire the shadow, keep
+    the binary and the reading"; enacted the same day.** Drop-in removed from
+    `~/.config/systemd/user/credence-governor.service.d/`, `daemon-reload` +
+    `restart`; verified after: no `CREDENCE_MEMBRANE_*` in the unit environment,
+    both govhost children (PIDs 3683, 62878) exited, record count flat across a
+    45-second window at 190,106, `/decide` serving normally, `NRestarts=0`. The
+    repo copy at `packages/governor_core/deploy/membrane.conf` is kept and now
+    carries a retirement header. The recommendation that was flagged, preserved
+    as written: **stop the shadow, keep everything else.**
     Grounds: both forms have now returned their readings and both readings are
     constants. `latent@1` confirmed its stated prediction and, as a
     falsification instrument, is spent — an instrument that has fired does not
